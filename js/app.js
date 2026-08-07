@@ -18,6 +18,10 @@
     confidence: $("confidence"),
     confTitle: $("confTitle"),
     confMsg: $("confMsg"),
+    marketPanel: $("marketPanel"),
+    marketBadge: $("marketBadge"),
+    marketSub: $("marketSub"),
+    marketList: $("marketList"),
     breakdown: $("breakdown"),
     breakdownBody: $("breakdownBody"),
     areaVal: $("areaVal"),
@@ -36,7 +40,11 @@
 
   const state = {
     location: null,
-    lastTotal: 0
+    lastTotal: 0,
+    market: null,
+    marketFetching: false,
+    marketSeq: 0,
+    areaTouched: false
   };
 
   const fmt = (n) => Math.round(n).toLocaleString("es-PE");
@@ -129,6 +137,7 @@
     els.mapStatus.textContent = loc.display || "Ubicación seleccionada";
     els.mapStatus.classList.remove("hidden");
     recompute();
+    fetchMarket();
   }
 
   async function applyReverse(lat, lon) {
@@ -141,6 +150,7 @@
       els.mapStatus.textContent = (place.display_name || "Ubicación").slice(0, 80);
       els.mapStatus.classList.remove("hidden");
       recompute();
+      fetchMarket();
     } catch (e) {
       showStatus("No se pudo geocodificar ese punto.");
     }
@@ -179,10 +189,12 @@
       document.querySelectorAll(".type-btn").forEach((x) => x.classList.remove("active"));
       b.classList.add("active");
       recompute();
+      fetchMarket();
     });
   });
 
   els.area.addEventListener("input", () => {
+    state.areaTouched = true;
     els.areaVal.textContent = els.area.value + " m²";
     recompute();
   });
@@ -223,7 +235,7 @@
   function recompute() {
     if (!state.location) return;
     const inputs = readInputs();
-    const r = computeValuation(state.location, inputs);
+    const r = computeValuation(state.location, inputs, state.market);
 
     const priceBlock = document.querySelector(".price-block");
     const empty = document.querySelector(".empty-state");
@@ -271,6 +283,94 @@
       tr.appendChild(td1);
       tr.appendChild(td2);
       els.breakdownBody.appendChild(tr);
+    });
+  }
+
+  /* ---------------- Precios de mercado (comparables reales) ---------------- */
+  async function fetchMarket() {
+    const loc = state.location;
+    if (!loc || (!loc.district && !loc.city)) return;
+    const type = readInputs().type;
+
+    const seq = ++state.marketSeq;
+    state.marketFetching = true;
+    els.marketPanel.classList.remove("hidden");
+    els.marketBadge.textContent = "Buscando…";
+    els.marketBadge.className = "market-badge loading";
+    els.marketSub.textContent = "Revisando avisos reales de Adondevivir y Urbania en " +
+      (loc.district || loc.city) + "…";
+
+    try {
+      const params = new URLSearchParams({
+        district: loc.district || "",
+        city: loc.city || "",
+        type: type
+      });
+      const res = await fetch("/api/comparables?" + params.toString());
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (seq !== state.marketSeq || !state.location) return;
+
+      state.market = data;
+      renderMarket(data, type);
+
+      if (!state.areaTouched && data.count >= 2 && data.medianArea) {
+        const autoArea = Math.round(clampVal(data.medianArea, 25, 400));
+        els.area.value = autoArea;
+        els.areaVal.textContent = autoArea + " m²";
+      }
+      recompute();
+    } catch (e) {
+      if (seq !== state.marketSeq) return;
+      state.market = null;
+      els.marketBadge.textContent = "Sin datos";
+      els.marketBadge.className = "market-badge empty";
+      els.marketSub.textContent = "No se pudieron obtener avisos ahora; se usa la base de datos estática.";
+      els.marketList.innerHTML = "";
+    } finally {
+      if (seq === state.marketSeq) state.marketFetching = false;
+    }
+  }
+
+  function clampVal(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function renderMarket(data, type) {
+    if (data.count >= 3) {
+      els.marketBadge.textContent = data.count + " avisos";
+      els.marketBadge.className = "market-badge";
+    } else if (data.count > 0) {
+      els.marketBadge.textContent = "Solo " + data.count + " avisos";
+      els.marketBadge.className = "market-badge empty";
+    } else {
+      els.marketBadge.textContent = "0 avisos";
+      els.marketBadge.className = "market-badge empty";
+    }
+
+    const srcs = data.sources.length ? data.sources.join(" y ") : "—";
+    els.marketSub.textContent = data.count
+      ? "Mediana de mercado: S/ " + fmt(data.medianPerM2) + "/m² (" +
+        (data.minPerM2 != null ? "S/ " + fmt(data.minPerM2) : "—") + " a S/ " +
+        fmt(data.maxPerM2) + "/m²). Fuentes: " + srcs + "."
+      : "No se encontraron avisos de " + type + "s en la zona. Se usa la base estática.";
+
+    els.marketList.innerHTML = "";
+    const items = data.listings.slice(0, 6);
+    items.forEach((l) => {
+      const li = document.createElement("li");
+      const p = document.createElement("div");
+      p.className = "m-price";
+      p.innerHTML = "S/ " + fmt(l.price) + " <small>" + (l.title || "") + "</small>";
+      const m = document.createElement("div");
+      m.className = "m-m2";
+      m.textContent = "S/ " + fmt(l.pricePerM2) + "/m²";
+      const tag = document.createElement("span");
+      tag.className = "m-tag";
+      tag.textContent = l.source;
+      m.appendChild(document.createElement("br"));
+      li.appendChild(p);
+      li.appendChild(m);
+      li.appendChild(tag);
+      els.marketList.appendChild(li);
     });
   }
 

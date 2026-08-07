@@ -55,8 +55,11 @@ function getCity(name) {
   return null;
 }
 
-function resolveBasePrice(location) {
+function resolveBasePrice(location, market) {
   // location: { district, city, state, lat, lon }
+  // market: { count, medianPerM2 } (comparables reales de Adondevivir/Urbania)
+  const hasMarket = market && market.count >= 3 && market.medianPerM2;
+
   if (location && location.district && DATA.districts[location.district]) {
     const d = DATA.districts[location.district];
     let base = d.price;
@@ -74,12 +77,20 @@ function resolveBasePrice(location) {
       base += clamp(boost, 0, base * 0.10);
     }
 
-    return {
+    const r = {
       base: base,
       label: location.district,
       level: "alta",
       msg: "Distrito identificado con exactitud en la base de datos."
     };
+    if (hasMarket) {
+      r.base = blendWithMarket(base, market);
+      r.msg = "Precio de mercado calculado desde " + market.count +
+        " avisos reales de Adondevivir y Urbania (mediana S/ " +
+        Math.round(market.medianPerM2).toLocaleString("es-PE") + "/m²).";
+      r.marketUsed = true;
+    }
+    return r;
   }
 
   // Sin distrito exacto pero dentro de Lima Metropolitana/Callao -> interpolación por distancia (IDW).
@@ -98,24 +109,40 @@ function resolveBasePrice(location) {
       wsum += w;
       psum += w * p.price;
     }
-    const base = psum / wsum;
-    return {
+    let base = psum / wsum;
+    const r = {
       base: base,
       label: "Lima Metropolitana (estimado por cercanía a " + nearest[0].key + ")",
       level: "media",
       msg: "No se identificó el distrito exacto. El precio se interpoló desde los distritos más cercanos."
     };
+    if (hasMarket) {
+      r.base = blendWithMarket(base, market);
+      r.msg = "Precio de mercado calculado desde " + market.count +
+        " avisos reales de Adondevivir y Urbania (mediana S/ " +
+        Math.round(market.medianPerM2).toLocaleString("es-PE") + "/m²).";
+      r.marketUsed = true;
+    }
+    return r;
   }
 
   // Ciudad reconocida fuera de Lima.
   const cityEntry = getCity(location.city);
   if (cityEntry) {
-    return {
+    const r = {
       base: cityEntry.price,
       label: location.city,
       level: "baja",
       msg: "Estimación a nivel de ciudad. La variación por zona dentro de la ciudad puede ser amplia."
     };
+    if (hasMarket) {
+      r.base = blendWithMarket(cityEntry.price, market);
+      r.msg = "Precio de mercado calculado desde " + market.count +
+        " avisos reales (mediana S/ " +
+        Math.round(market.medianPerM2).toLocaleString("es-PE") + "/m²).";
+      r.marketUsed = true;
+    }
+    return r;
   }
 
   return {
@@ -127,6 +154,13 @@ function resolveBasePrice(location) {
   };
 }
 
+function blendWithMarket(staticBase, market) {
+  const median = market.medianPerM2;
+  // Si la mediana de mercado se sale demasiado del rango esperado, confiamos en la estática.
+  if (median < staticBase * 0.45 || median > staticBase * 2.2) return staticBase;
+  return 0.7 * median + 0.3 * staticBase;
+}
+
 function isLimaZone(location) {
   if (!location) return false;
   const state = (location.state || "").toLowerCase();
@@ -136,8 +170,8 @@ function isLimaZone(location) {
   return false;
 }
 
-function computeValuation(location, inputs) {
-  const base = resolveBasePrice(location);
+function computeValuation(location, inputs, market) {
+  const base = resolveBasePrice(location, market);
   const area = clamp(inputs.area, 15, 1500);
 
   const sizeFactor = clamp(Math.pow(70 / area, 0.12), 0.80, 1.12);
@@ -163,7 +197,9 @@ function computeValuation(location, inputs) {
   const estadoFactor = inputs.estado === "nuevo" ? 1.04 : 1.0;
 
   const factors = [
-    { key: "base", label: "Precio m² base — " + base.label, factor: 1, pct: null },
+    { key: "base", label: base.marketUsed
+        ? "Precio m² de mercado (" + market.count + " avisos) — " + base.label
+        : "Precio m² base — " + base.label, factor: 1, pct: null },
     { key: "tipo", label: "Tipo de inmueble (" + inputs.type + ")", factor: typeFactor, pct: (typeFactor - 1) * 100 },
     { key: "tamano", label: "Tamaño (" + area + " m²)", factor: sizeFactor, pct: (sizeFactor - 1) * 100 },
     { key: "edad", label: "Antigüedad (" + age + " años)", factor: ageFactor, pct: (ageFactor - 1) * 100 },
@@ -193,6 +229,7 @@ function computeValuation(location, inputs) {
     factors: factors,
     confidence: base.level,
     confidenceMsg: base.msg,
-    zoneLabel: base.label
+    zoneLabel: base.label,
+    market: market
   };
 }
