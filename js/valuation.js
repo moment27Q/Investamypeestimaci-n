@@ -12,6 +12,10 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+/* ------------------------------------------------------------------ */
+/* Tablas de ajuste — cada tipo de inmueble tiene sus propios pesos    */
+/* ------------------------------------------------------------------ */
+
 const TYPE_FACTORS = {
   departamento: 1.00,
   casa:         0.92,
@@ -30,11 +34,235 @@ const CONDITION_FACTORS = {
 
 const ZONE_FACTORS = {
   auto:     1.00,
-  premium:  1.08,
-  central:  1.03,
+  premium:  1.03,
+  central:  1.015,
   normal:   1.00,
-  periferia:0.92
+  periferia:0.96
 };
+
+const FINISH_FACTORS = { basico: 0.94, intermedio: 1.00, premium: 1.07 };
+const VIEW_FACTORS = { none: 1.00, exterior: 1.02, interior: 0.98 };
+const REGIME_FACTORS = { independiente: 1.00, condominio: 1.05 };
+const AMENITIES_FACTORS = { ninguno: 0.98, basico: 1.00, medio: 1.02, completo: 1.04 };
+const PARKING_FACTORS = { 0: 0.99, 1: 1.00, 2: 1.02, 3: 1.03 };
+const ELEVATOR_FACTORS = { si: 1.02, no: 1.00 };
+const STORAGE_FACTORS = { si: 1.01, no: 1.00 };
+const SHAPE_FACTORS = { regular: 1.00, irregular: 0.93 };
+const TOPO_FACTORS = { plana: 1.00, pendiente: 0.88, desnivel: 0.90 };
+const ZONING_FACTORS = { residencial: 1.00, comercial: 1.12, industrial: 0.85, mixto: 1.06 };
+const SERVICES_FACTORS = { completo: 1.00, parcial: 0.92, ninguno: 0.80 };
+const URBAN_FACTORS = { habilitado: 1.00, no_habilitado: 0.80 };
+const ROAD_FACTORS = { si: 1.05, no: 1.00 };
+const CORNER_FACTORS = { esquina: 1.06, intermedio: 1.00 };
+const FENCE_FACTORS = { si: 1.00, no: 0.97 };
+
+const REFERENCE_AREA = { departamento: 70, casa: 180, terreno: 300, local: 100, oficina: 100 };
+
+function fr(rows, key, label, factor) {
+  if (factor !== 1) rows.push({ key: key, label: label, factor: factor, pct: (factor - 1) * 100 });
+}
+
+function sizeFactorFor(type, area, refArea) {
+  const ref = refArea || REFERENCE_AREA[type] || 70;
+  return clamp(Math.pow(ref / area, 0.12), 0.75, 1.15);
+}
+
+function landRatioFor(basePrice) {
+  return clamp(0.5 + (basePrice - 2500) / 12000, 0.5, 0.85);
+}
+
+/* ------------------------- DEPARTAMENTO ------------------------- */
+function calcDepartamento(inputs, envFactor, refArea) {
+  const area = clamp(inputs.area, 15, 1500);
+  const sizeFactor = sizeFactorFor("departamento", area, refArea);
+  const typeFactor = TYPE_FACTORS.departamento;
+
+  let conditionFactor = 1, ageFactor = 1, floorFactor = 1, zoneFactor = 1, estadoFactor = 1;
+  conditionFactor = CONDITION_FACTORS[inputs.condition] || 1;
+  const age = clamp(inputs.age, 0, 60);
+  if (!(inputs.estado === "nuevo" || age <= 3)) ageFactor = Math.max(0.70, 1 - (age - 3) * 0.008);
+  const floor = clamp(inputs.floor, 0, 40);
+  if (floor <= 0) floorFactor = 0.97;
+  else if (floor === 1) floorFactor = 0.96;
+  else if (floor >= 10) floorFactor = 1.07;
+  else floorFactor = 0.98 + floor * 0.004;
+  zoneFactor = ZONE_FACTORS[inputs.zone] || 1;
+  estadoFactor = inputs.estado === "nuevo" ? 1.04 : 1.0;
+
+  const bedrooms = clamp(inputs.bedrooms, 0, 8);
+  const bedroomFactor = bedrooms <= 0 ? 0.99 : clamp(1 + (bedrooms - 2) * 0.008, 0.96, 1.05);
+  const bathrooms = clamp(inputs.bathrooms, 1, 8);
+  const bathroomFactor = clamp(1 + (bathrooms - 2) * 0.006, 0.97, 1.04);
+  const totalFloors = clamp(inputs.totalFloors || 5, 1, 60);
+  const buildingFactor = totalFloors >= 15 ? 1.02 : totalFloors >= 8 ? 1.01 : 1.0;
+  const elevatorFactor = ELEVATOR_FACTORS[inputs.elevator] || 1;
+  const parkingFactor = PARKING_FACTORS[inputs.parking] || 1;
+  const storageFactor = STORAGE_FACTORS[inputs.storage] || 1;
+  const viewFactor = VIEW_FACTORS[inputs.view] || 1;
+  const finishesFactor = FINISH_FACTORS[inputs.finishes] || 1;
+  const amenitiesFactor = AMENITIES_FACTORS[inputs.amenities] || 1;
+  const regimeFactor = REGIME_FACTORS[inputs.regime] || 1;
+  const maintenanceFactor = clamp(1 - Math.min(inputs.maintenance || 0, 2000) / 200000, 0.99, 1.0);
+  const envF = envFactor || 1;
+
+  const rows = [];
+  fr(rows, "tipo", "Tipo de inmueble (departamento)", typeFactor);
+  fr(rows, "tamano", "Tamaño (" + area + " m²)", sizeFactor);
+  fr(rows, "edad", "Antigüedad (" + age + " años)", ageFactor);
+  fr(rows, "condicion", "Estado de conservación", conditionFactor);
+  fr(rows, "piso", "Piso / planta (" + floor + ")", floorFactor);
+  fr(rows, "zona", "Zona interna del distrito", zoneFactor);
+  fr(rows, "estado", "Nuevo / usado", estadoFactor);
+  fr(rows, "dorm", "Dormitorios (" + bedrooms + ")", bedroomFactor);
+  fr(rows, "bano", "Baños (" + bathrooms + ")", bathroomFactor);
+  fr(rows, "edificio", "Edificio de " + totalFloors + " pisos", buildingFactor);
+  fr(rows, "ascensor", inputs.elevator === "si" ? "Con ascensor" : "Sin ascensor", elevatorFactor);
+  fr(rows, "parqueo", "Estacionamiento (" + inputs.parking + ")", parkingFactor);
+  fr(rows, "deposito", inputs.storage === "si" ? "Con depósito" : "Sin depósito", storageFactor);
+  fr(rows, "vista", "Vista " + inputs.view, viewFactor);
+  fr(rows, "acabados", "Acabados " + inputs.finishes, finishesFactor);
+  fr(rows, "amenities", "Amenities " + inputs.amenities, amenitiesFactor);
+  fr(rows, "regimen", "Régimen " + inputs.regime, regimeFactor);
+  fr(rows, "mantenimiento", "Mantenimiento S/ " + (inputs.maintenance || 0), maintenanceFactor);
+  fr(rows, "entorno", "Entorno socioeconómico", envF);
+
+  const factor = typeFactor * sizeFactor * ageFactor * conditionFactor * floorFactor *
+    zoneFactor * estadoFactor * bedroomFactor * bathroomFactor * buildingFactor *
+    elevatorFactor * parkingFactor * storageFactor * viewFactor * finishesFactor *
+    amenitiesFactor * regimeFactor * maintenanceFactor * envF;
+
+  return { area: area, factor: factor, rows: rows };
+}
+
+/* ----------------------------- CASA ----------------------------- */
+function calcCasa(inputs, envFactor, refArea) {
+  const builtArea = clamp(inputs.area, 20, 1500);
+  const terrainArea = clamp(inputs.terrenoArea || builtArea, 20, 5000);
+  const sizeFactor = sizeFactorFor("casa", builtArea, refArea);
+  const typeFactor = TYPE_FACTORS.casa;
+
+  let conditionFactor = 1, ageFactor = 1, zoneFactor = 1, estadoFactor = 1;
+  conditionFactor = CONDITION_FACTORS[inputs.condition] || 1;
+  const age = clamp(inputs.age, 0, 60);
+  if (!(inputs.estado === "nuevo" || age <= 3)) ageFactor = Math.max(0.70, 1 - (age - 3) * 0.008);
+  zoneFactor = ZONE_FACTORS[inputs.zone] || 1;
+  estadoFactor = inputs.estado === "nuevo" ? 1.04 : 1.0;
+
+  const bedrooms = clamp(inputs.bedrooms, 0, 10);
+  const bedroomFactor = bedrooms <= 0 ? 0.99 : clamp(1 + (bedrooms - 3) * 0.006, 0.95, 1.04);
+  const bathrooms = clamp(inputs.bathrooms, 1, 8);
+  const bathroomFactor = clamp(1 + (bathrooms - 3) * 0.005, 0.96, 1.03);
+  const houseFloors = clamp(inputs.casaFloors || 2, 1, 8);
+  const floorsFactor = clamp(1 + (houseFloors - 2) * 0.01, 0.98, 1.06);
+  const parkingFactor = PARKING_FACTORS[inputs.parking] || 1;
+  const front = clamp(inputs.front || 10, 3, 60);
+  const frontFactor = clamp(1 + (front - 10) * 0.004, 0.92, 1.06);
+  const shapeFactor = SHAPE_FACTORS[inputs.shape] || 1;
+  const topoFactor = TOPO_FACTORS[inputs.topography] || 1;
+  const fenceFactor = FENCE_FACTORS[inputs.fence] || 1;
+  const garden = clamp(inputs.garden || 0, 0, 2000);
+  const gardenFactor = clamp(1 + Math.min(garden, 200) * 0.0002, 1, 1.04);
+  const finishesFactor = FINISH_FACTORS[inputs.finishes] || 1;
+  const remodel = clamp(inputs.remodel || 0, 0, 50);
+  const remodelFactor = remodel > 0 && remodel <= 10 ? 1.02 : 1.0;
+  const landRatio = terrainArea / builtArea;
+  const landFactor = clamp(1 + Math.max(0, landRatio - 1.5) * 0.05, 1, 1.08);
+  const envF = envFactor || 1;
+
+  const rows = [];
+  fr(rows, "tipo", "Tipo de inmueble (casa)", typeFactor);
+  fr(rows, "tamano", "Área construida (" + builtArea + " m²)", sizeFactor);
+  fr(rows, "tierra", "Ratio terreno/construido (" + Math.round(landRatio * 10) / 10 + ")", landFactor);
+  fr(rows, "edad", "Antigüedad (" + age + " años)", ageFactor);
+  fr(rows, "condicion", "Estado de conservación", conditionFactor);
+  fr(rows, "zona", "Zona interna del distrito", zoneFactor);
+  fr(rows, "estado", "Nuevo / usado", estadoFactor);
+  fr(rows, "pisos", "Pisos de la casa (" + houseFloors + ")", floorsFactor);
+  fr(rows, "dorm", "Dormitorios (" + bedrooms + ")", bedroomFactor);
+  fr(rows, "bano", "Baños (" + bathrooms + ")", bathroomFactor);
+  fr(rows, "parqueo", "Estacionamiento (" + inputs.parking + ")", parkingFactor);
+  fr(rows, "frente", "Frente del lote (" + front + " ml)", frontFactor);
+  fr(rows, "forma", "Forma " + inputs.shape, shapeFactor);
+  fr(rows, "topografia", "Topografía " + inputs.topography, topoFactor);
+  fr(rows, "cerco", inputs.fence === "si" ? "Con cerco perimetral" : "Sin cerco perimetral", fenceFactor);
+  fr(rows, "jardin", "Jardín / áreas libres (" + garden + " m²)", gardenFactor);
+  fr(rows, "acabados", "Acabados " + inputs.finishes, finishesFactor);
+  fr(rows, "remodel", "Remodelada hace " + remodel + " años", remodelFactor);
+  fr(rows, "entorno", "Entorno socioeconómico", envF);
+
+  const factor = typeFactor * sizeFactor * landFactor * ageFactor * conditionFactor *
+    zoneFactor * estadoFactor * floorsFactor * bedroomFactor * bathroomFactor *
+    parkingFactor * frontFactor * shapeFactor * topoFactor * fenceFactor *
+    gardenFactor * finishesFactor * remodelFactor * envF;
+
+  return { area: builtArea, factor: factor, rows: rows };
+}
+
+/* ---------------------------- TERRENO ---------------------------- */
+function calcTerreno(inputs, envFactor, landRatio) {
+  const area = clamp(inputs.area, 15, 20000);
+  const sizeFactor = sizeFactorFor("terreno", area);
+  const typeFactor = landRatio || TYPE_FACTORS.terreno;
+  const zoneFactor = ZONE_FACTORS[inputs.zone] || 1;
+
+  const front = clamp(inputs.front || 10, 3, 100);
+  const frontFactor = clamp(1 + (front - 10) * 0.006, 0.90, 1.10);
+  const shapeFactor = SHAPE_FACTORS[inputs.shape] || 1;
+  const topoFactor = TOPO_FACTORS[inputs.topography] || 1;
+  const zoningFactor = ZONING_FACTORS[inputs.zoning] || 1;
+  const servicesFactor = SERVICES_FACTORS[inputs.services] || 1;
+  const cornerFactor = CORNER_FACTORS[inputs.corner] || 1;
+  const urbanFactor = URBAN_FACTORS[inputs.urbanization] || 1;
+  const roadFactor = ROAD_FACTORS[inputs.road] || 1;
+  const envF = envFactor || 1;
+
+  const rows = [];
+  fr(rows, "tipo", "Tipo de inmueble (terreno)", typeFactor);
+  fr(rows, "tamano", "Área del terreno (" + area + " m²)", sizeFactor);
+  fr(rows, "frente", "Frente del lote (" + front + " ml)", frontFactor);
+  fr(rows, "forma", "Forma " + inputs.shape, shapeFactor);
+  fr(rows, "topografia", "Topografía " + inputs.topography, topoFactor);
+  fr(rows, "zonificacion", "Zonificación " + inputs.zoning, zoningFactor);
+  fr(rows, "servicios", "Servicios a pie de lote (" + inputs.services + ")", servicesFactor);
+  fr(rows, "esquina", inputs.corner === "esquina" ? "Lote en esquina" : "Lote intermedio", cornerFactor);
+  fr(rows, "habilitacion", inputs.urbanization === "habilitado" ? "Urbano habilitado" : "No habilitado", urbanFactor);
+  fr(rows, "via", inputs.road === "si" ? "Cerca de vía principal" : "Sin vía principal cercana", roadFactor);
+  fr(rows, "zona", "Zona interna del distrito", zoneFactor);
+  fr(rows, "entorno", "Entorno socioeconómico", envF);
+
+  const factor = typeFactor * sizeFactor * zoneFactor * frontFactor * shapeFactor *
+    topoFactor * zoningFactor * servicesFactor * cornerFactor * urbanFactor *
+    roadFactor * envF;
+
+  return { area: area, factor: factor, rows: rows };
+}
+
+/* -------------------- LOCAL / OFICINA (genérico) -------------------- */
+function calcGeneric(inputs, envFactor, type, refArea) {
+  const area = clamp(inputs.area, 15, 1500);
+  const sizeFactor = sizeFactorFor(type, area, refArea);
+  const typeFactor = TYPE_FACTORS[type] || 1;
+  const conditionFactor = CONDITION_FACTORS[inputs.condition] || 1;
+  const age = clamp(inputs.age, 0, 60);
+  const ageFactor = (!(inputs.estado === "nuevo" || age <= 3)) ? Math.max(0.70, 1 - (age - 3) * 0.008) : 1;
+  const zoneFactor = ZONE_FACTORS[inputs.zone] || 1;
+  const estadoFactor = inputs.estado === "nuevo" ? 1.04 : 1.0;
+  const envF = envFactor || 1;
+
+  const rows = [];
+  fr(rows, "tipo", "Tipo de inmueble (" + type + ")", typeFactor);
+  fr(rows, "tamano", "Tamaño (" + area + " m²)", sizeFactor);
+  fr(rows, "edad", "Antigüedad (" + age + " años)", ageFactor);
+  fr(rows, "condicion", "Estado de conservación", conditionFactor);
+  fr(rows, "zona", "Zona interna del distrito", zoneFactor);
+  fr(rows, "estado", "Nuevo / usado", estadoFactor);
+  fr(rows, "entorno", "Entorno socioeconómico", envF);
+
+  const factor = typeFactor * sizeFactor * ageFactor * conditionFactor * zoneFactor * estadoFactor * envF;
+  return { area: area, factor: factor, rows: rows };
+}
+
+/* ------------------------------------------------------------------ */
 
 function normalize(s) {
   return (s || "")
@@ -57,7 +285,7 @@ function getCity(name) {
 
 function resolveBasePrice(location, market) {
   // location: { district, city, state, lat, lon }
-  // market: { count, medianPerM2 } (comparables reales de Adondevivir/Urbania)
+  // market: { count, medianPerM2 } (comparables reales de Adondevivir/Urbania/Remax)
   const hasMarket = market && market.count >= 3 && market.medianPerM2;
 
   if (location && location.district && DATA.districts[location.district]) {
@@ -80,16 +308,14 @@ function resolveBasePrice(location, market) {
     const r = {
       base: base,
       label: location.district,
-      level: "alta",
-      msg: "Distrito identificado con exactitud en la base de datos."
+      level: hasMarket ? "alta" : "media",
+      msg: hasMarket
+        ? "Precio de mercado calculado desde " + market.count +
+          " avisos reales de Adondevivir, Urbania y Remax (mediana S/ " +
+          Math.round(market.medianPerM2).toLocaleString("es-PE") + "/m²)."
+        : "Distrito identificado con exactitud en la base de datos. Sin avisos de mercado suficientes; se usó el valor estático."
     };
-    if (hasMarket) {
-      r.base = blendWithMarket(base, market);
-      r.msg = "Precio de mercado calculado desde " + market.count +
-        " avisos reales de Adondevivir y Urbania (mediana S/ " +
-        Math.round(market.medianPerM2).toLocaleString("es-PE") + "/m²).";
-      r.marketUsed = true;
-    }
+    if (hasMarket) r.base = blendWithMarket(base, market);
     return r;
   }
 
@@ -113,13 +339,13 @@ function resolveBasePrice(location, market) {
     const r = {
       base: base,
       label: "Lima Metropolitana (estimado por cercanía a " + nearest[0].key + ")",
-      level: "media",
+      level: hasMarket ? "media" : "baja",
       msg: "No se identificó el distrito exacto. El precio se interpoló desde los distritos más cercanos."
     };
     if (hasMarket) {
       r.base = blendWithMarket(base, market);
       r.msg = "Precio de mercado calculado desde " + market.count +
-        " avisos reales de Adondevivir y Urbania (mediana S/ " +
+        " avisos reales de Adondevivir, Urbania y Remax (mediana S/ " +
         Math.round(market.medianPerM2).toLocaleString("es-PE") + "/m²).";
       r.marketUsed = true;
     }
@@ -158,7 +384,7 @@ function blendWithMarket(staticBase, market) {
   const median = market.medianPerM2;
   // Si la mediana de mercado se sale demasiado del rango esperado, confiamos en la estática.
   if (median < staticBase * 0.45 || median > staticBase * 2.2) return staticBase;
-  return 0.7 * median + 0.3 * staticBase;
+  return 0.85 * median + 0.15 * staticBase;
 }
 
 function isLimaZone(location) {
@@ -170,51 +396,37 @@ function isLimaZone(location) {
   return false;
 }
 
-function computeValuation(location, inputs, market) {
+function computeValuation(location, inputs, market, envProfile) {
   const base = resolveBasePrice(location, market);
-  const area = clamp(inputs.area, 15, 1500);
+  const envRaw = envProfile && envProfile.environmentFactor ? envProfile.environmentFactor : 1;
+  const envFactor = 1 + (envRaw - 1) * 0.5;
+  const hasMarket = market && market.count >= 3 && market.medianPerM2;
+  const refArea = hasMarket && market.medianArea ? market.medianArea : null;
+  const landRatio = landRatioFor(base.base);
 
-  const sizeFactor = clamp(Math.pow(70 / area, 0.12), 0.80, 1.12);
-  const typeFactor = TYPE_FACTORS[inputs.type] || 1;
-  const conditionFactor = CONDITION_FACTORS[inputs.condition] || 1;
+  const type = inputs.type || "departamento";
+  let calc;
+  if (type === "departamento") calc = calcDepartamento(inputs, envFactor, refArea);
+  else if (type === "casa") calc = calcCasa(inputs, envFactor, refArea);
+  else if (type === "terreno") calc = calcTerreno(inputs, envFactor, landRatio);
+  else calc = calcGeneric(inputs, envFactor, type, refArea);
 
-  let ageFactor = 1;
-  const age = clamp(inputs.age, 0, 60);
-  if (!(inputs.estado === "nuevo" || age <= 3)) {
-    ageFactor = Math.max(0.70, 1 - (age - 3) * 0.008);
-  }
-
-  let floorFactor = 1;
-  const floor = clamp(inputs.floor, 0, 40);
-  if (inputs.type === "departamento") {
-    if (floor <= 0) floorFactor = 0.97;
-    else if (floor === 1) floorFactor = 0.96;
-    else if (floor >= 10) floorFactor = 1.07;
-    else floorFactor = 0.98 + floor * 0.004;
-  }
-
-  const zoneFactor = ZONE_FACTORS[inputs.zone] || 1;
-  const estadoFactor = inputs.estado === "nuevo" ? 1.04 : 1.0;
-
-  const factors = [
-    { key: "base", label: base.marketUsed
-        ? "Precio m² de mercado (" + market.count + " avisos) — " + base.label
-        : "Precio m² base — " + base.label, factor: 1, pct: null },
-    { key: "tipo", label: "Tipo de inmueble (" + inputs.type + ")", factor: typeFactor, pct: (typeFactor - 1) * 100 },
-    { key: "tamano", label: "Tamaño (" + area + " m²)", factor: sizeFactor, pct: (sizeFactor - 1) * 100 },
-    { key: "edad", label: "Antigüedad (" + age + " años)", factor: ageFactor, pct: (ageFactor - 1) * 100 },
-    { key: "condicion", label: "Estado de conservación", factor: conditionFactor, pct: (conditionFactor - 1) * 100 },
-    { key: "piso", label: "Piso / planta (" + floor + ")", factor: floorFactor, pct: (floorFactor - 1) * 100 },
-    { key: "zona", label: "Zona interna del distrito", factor: zoneFactor, pct: (zoneFactor - 1) * 100 },
-    { key: "estado", label: "Nuevo / usado", factor: estadoFactor, pct: (estadoFactor - 1) * 100 }
-  ];
-
-  const effectivePerM2 = base.base * sizeFactor * typeFactor * ageFactor *
-    conditionFactor * floorFactor * zoneFactor * estadoFactor;
-
-  const total = effectivePerM2 * area;
+  const effectivePerM2 = base.base * calc.factor;
+  const total = effectivePerM2 * calc.area;
   const rangeLow = total * 0.92;
   const rangeHigh = total * 1.08;
+  const realization = total * 0.8;
+
+  const factors = [
+    {
+      key: "base",
+      label: base.marketUsed
+        ? "Precio m² de mercado (" + market.count + " avisos) — " + base.label
+        : "Precio m² base — " + base.label,
+      factor: 1,
+      pct: null
+    }
+  ].concat(calc.rows);
 
   return {
     basePerM2: base.base,
@@ -225,11 +437,14 @@ function computeValuation(location, inputs, market) {
     rangeHigh: rangeHigh,
     rangeLowUSD: rangeLow / DATA.fx,
     rangeHighUSD: rangeHigh / DATA.fx,
-    area: area,
+    realizationTotal: realization,
+    realizationTotalUSD: realization / DATA.fx,
+    area: calc.area,
     factors: factors,
     confidence: base.level,
     confidenceMsg: base.msg,
     zoneLabel: base.label,
+    envFactor: envFactor,
     market: market
   };
 }

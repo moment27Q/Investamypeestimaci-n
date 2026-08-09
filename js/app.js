@@ -14,6 +14,8 @@
     priceUSD: $("priceUSD"),
     priceRange: $("priceRange"),
     perM2: $("perM2"),
+    priceCommercial: $("priceCommercial"),
+    priceRealization: $("priceRealization"),
     footTotal: $("footTotal"),
     confidence: $("confidence"),
     confTitle: $("confTitle"),
@@ -22,6 +24,10 @@
     marketBadge: $("marketBadge"),
     marketSub: $("marketSub"),
     marketList: $("marketList"),
+    listingModal: $("listingModal"),
+    lmSource: $("lmSource"),
+    lmBody: $("lmBody"),
+    lmClose: $("lmClose"),
     breakdown: $("breakdown"),
     breakdownBody: $("breakdownBody"),
     areaVal: $("areaVal"),
@@ -35,7 +41,41 @@
     piso: $("piso"),
     condicion: $("condicion"),
     estado: $("estado"),
-    zona: $("zona")
+    zona: $("zona"),
+    areaLabel: $("areaLabel"),
+    totalFloors: $("totalFloors"),
+    elevator: $("elevator"),
+    parking: $("parking"),
+    storage: $("storage"),
+    view: $("view"),
+    finishes: $("finishes"),
+    amenities: $("amenities"),
+    maintenance: $("maintenance"),
+    regime: $("regime"),
+    terrenoArea: $("terrenoArea"),
+    terrenoAreaVal: $("terrenoAreaVal"),
+    casaFloors: $("casaFloors"),
+    front: $("front"),
+    frontVal: $("frontVal"),
+    shape: $("shape"),
+    topography: $("topography"),
+    fence: $("fence"),
+    garden: $("garden"),
+    gardenVal: $("gardenVal"),
+    remodel: $("remodel"),
+    remodelVal: $("remodelVal"),
+    zoning: $("zoning"),
+    services: $("services"),
+    corner: $("corner"),
+    urbanization: $("urbanization"),
+    road: $("road"),
+    envPanel: $("envPanel"),
+    envBadge: $("envBadge"),
+    envSub: $("envSub"),
+    envAmenities: $("envAmenities"),
+    envServices: $("envServices"),
+    envFactorVal: $("envFactorVal"),
+    envWhy: $("envWhy")
   };
 
   const state = {
@@ -44,7 +84,9 @@
     market: null,
     marketFetching: false,
     marketSeq: 0,
-    areaTouched: false
+    envProfile: null,
+    areaTouched: false,
+    zoneTouched: false
   };
 
   const fmt = (n) => Math.round(n).toLocaleString("es-PE");
@@ -79,14 +121,24 @@
     debounceTimer = setTimeout(() => runSearch(q), 350);
   });
 
+  els.input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      clearTimeout(debounceTimer);
+      const q = els.input.value.trim();
+      if (q.length < 4) return;
+      e.preventDefault();
+      runSearch(q, true);
+    }
+  });
+
   async function runSearch(q, autoSelect) {
     try {
-      const places = await GEO.search(q);
+      const places = prioritizePlaces(await GEO.search(q));
       if (els.input.value.trim() !== q) return;
       renderSuggestions(places);
       if (autoSelect && places.length) {
         selectedPlace = places[0];
-        els.input.value = shortName(places[0].display_name);
+        els.input.value = GEO.formatAddress(places[0].address, places[0].display_name);
         applyPlace(places[0]);
         hideSuggestions();
       }
@@ -104,10 +156,11 @@
       const d = document.createElement("div");
       d.className = "suggestion" + (i === 0 ? " active" : "");
       const name = p.display_name || p.name || "";
-      d.innerHTML = name.replace(/, Peru|, Perú/g, "") + "<small>" + shortName(name) + "</small>";
+      const pretty = GEO.formatAddress(p.address, name);
+      d.innerHTML = shortName(pretty) + "<small>" + shortName(name) + "</small>";
       d.addEventListener("click", () => {
         selectedPlace = p;
-        els.input.value = shortName(name);
+        els.input.value = pretty;
         applyPlace(p);
         hideSuggestions();
       });
@@ -128,16 +181,27 @@
   });
 
   /* ---------------- Aplicar lugar ---------------- */
+  function placeLabel(place) {
+    const a = place.address || {};
+    const pretty = GEO.formatAddress(a, place.display_name);
+    const zone = (a.suburb || a.city_district || a.city || a.town || "").toString().replace(/,.*/, "");
+    return { pretty: pretty, zone: zone.trim() };
+  }
+
   function applyPlace(place) {
     const loc = placeToLocation(place);
     state.location = loc;
     setMarker(loc.lat, loc.lon);
+    els.zona.value = "auto";
+    state.zoneTouched = false;
+    const { pretty } = placeLabel(place);
     const zone = loc.district || loc.city || "zona detectada";
-    els.zoneLabel.textContent = zone + " · " + (loc.display || "").slice(0, 60);
-    els.mapStatus.textContent = loc.display || "Ubicación seleccionada";
+    els.zoneLabel.textContent = zone + " · " + pretty;
+    els.mapStatus.textContent = pretty;
     els.mapStatus.classList.remove("hidden");
     recompute();
     fetchMarket();
+    fetchEnvironment();
   }
 
   async function applyReverse(lat, lon) {
@@ -146,11 +210,15 @@
       const loc = placeToLocation(place);
       state.location = loc;
       setMarker(lat, lon);
-      els.zoneLabel.textContent = loc.district || loc.city || "zona detectada";
-      els.mapStatus.textContent = (place.display_name || "Ubicación").slice(0, 80);
+      els.zona.value = "auto";
+      state.zoneTouched = false;
+      const { pretty } = placeLabel(place);
+      els.zoneLabel.textContent = (loc.district || loc.city || "zona detectada") + " · " + pretty;
+      els.mapStatus.textContent = pretty;
       els.mapStatus.classList.remove("hidden");
       recompute();
       fetchMarket();
+      fetchEnvironment();
     } catch (e) {
       showStatus("No se pudo geocodificar ese punto.");
     }
@@ -188,38 +256,80 @@
     b.addEventListener("click", () => {
       document.querySelectorAll(".type-btn").forEach((x) => x.classList.remove("active"));
       b.classList.add("active");
+      renderFields();
       recompute();
       fetchMarket();
+      fetchEnvironment();
     });
   });
 
-  els.area.addEventListener("input", () => {
-    state.areaTouched = true;
-    els.areaVal.textContent = els.area.value + " m²";
-    recompute();
-  });
-  els.dorm.addEventListener("input", () => {
-    els.dormVal.textContent = els.dorm.value;
-    recompute();
-  });
-  els.bano.addEventListener("input", () => {
-    els.banoVal.textContent = els.bano.value;
-    recompute();
-  });
-  els.edad.addEventListener("input", () => {
-    els.edadVal.textContent = els.edad.value + " años";
-    recompute();
+  function renderFields() {
+    const type = document.querySelector(".type-btn.active").dataset.type;
+    document.querySelectorAll("[data-types]").forEach((el) => {
+      el.classList.toggle("hidden", !el.dataset.types.split(" ").includes(type));
+    });
+    els.area.min = type === "terreno" ? 80 : 30;
+    els.area.max = type === "terreno" ? 2000 : 400;
+    els.areaLabel.textContent = type === "terreno" ? "Área del terreno" : "Área construida";
+    if (!state.areaTouched) {
+      const med = type === "terreno" ? 180 : 90;
+      els.area.value = med;
+      els.areaVal.textContent = med + " m²";
+    }
+  }
+
+  const RANGES = [
+    ["area", "areaVal", (v) => v + " m²"],
+    ["dorm", "dormVal", (v) => v],
+    ["bano", "banoVal", (v) => v],
+    ["edad", "edadVal", (v) => v + " años"],
+    ["terrenoArea", "terrenoAreaVal", (v) => v + " m²"],
+    ["front", "frontVal", (v) => v + " m"],
+    ["garden", "gardenVal", (v) => v + " m²"],
+    ["remodel", "remodelVal", (v) => v + " años"]
+  ];
+  RANGES.forEach(([inp, val, fmt]) => {
+    const range = els[inp];
+    range.addEventListener("input", () => {
+      if (inp === "area") state.areaTouched = true;
+      els[val].textContent = fmt(range.value);
+      recompute();
+    });
   });
 
-  [els.piso, els.condicion, els.estado, els.zona].forEach((el) => {
+  [els.piso, els.condicion, els.estado, els.zona,
+    els.totalFloors, els.elevator, els.parking, els.storage, els.view,
+    els.finishes, els.amenities, els.maintenance, els.regime, els.casaFloors,
+    els.shape, els.topography, els.fence, els.zoning, els.services,
+    els.corner, els.urbanization, els.road
+  ].forEach((el) => {
     el.addEventListener("input", recompute);
     el.addEventListener("change", recompute);
   });
 
+  els.zona.addEventListener("change", () => {
+    state.zoneTouched = true;
+  });
+
+  els.lmClose.addEventListener("click", closeListingModal);
+  els.listingModal.addEventListener("click", (e) => {
+    if (e.target === els.listingModal) closeListingModal();
+  });
+  els.lmBody.addEventListener("click", (e) => {
+    const t = e.target.closest(".lm-thumbs img");
+    if (!t) return;
+    const main = els.lmBody.querySelector(".lm-main");
+    if (main) main.src = t.src;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !els.listingModal.classList.contains("hidden")) closeListingModal();
+  });
+
   function readInputs() {
     const active = document.querySelector(".type-btn.active");
+    const type = active ? active.dataset.type : "departamento";
     return {
-      type: active ? active.dataset.type : "departamento",
+      type,
       area: parseFloat(els.area.value) || 70,
       bedrooms: parseInt(els.dorm.value) || 2,
       bathrooms: parseInt(els.bano.value) || 2,
@@ -227,7 +337,29 @@
       floor: parseInt(els.piso.value) || 3,
       condition: els.condicion.value,
       estado: els.estado.value,
-      zone: els.zona.value
+      zone: els.zona.value,
+      totalFloors: parseInt(els.totalFloors.value) || null,
+      elevator: els.elevator.value,
+      parking: els.parking.value,
+      storage: els.storage.value,
+      view: els.view.value,
+      finishes: els.finishes.value,
+      amenities: els.amenities.value,
+      maintenance: els.maintenance.value,
+      regime: els.regime.value,
+      terrenoArea: parseFloat(els.terrenoArea.value) || null,
+      casaFloors: parseInt(els.casaFloors.value) || null,
+      front: parseFloat(els.front.value) || null,
+      shape: els.shape.value,
+      topography: els.topography.value,
+      fence: els.fence.value,
+      garden: parseFloat(els.garden.value) || null,
+      remodel: parseInt(els.remodel.value) || null,
+      zoning: els.zoning.value,
+      services: els.services.value,
+      corner: els.corner.value,
+      urbanization: els.urbanization.value,
+      road: els.road.value
     };
   }
 
@@ -235,7 +367,7 @@
   function recompute() {
     if (!state.location) return;
     const inputs = readInputs();
-    const r = computeValuation(state.location, inputs, state.market);
+    const r = computeValuation(state.location, inputs, state.market, state.envProfile);
 
     const priceBlock = document.querySelector(".price-block");
     const empty = document.querySelector(".empty-state");
@@ -246,6 +378,9 @@
 
     els.priceUSD.textContent = "≈ USD " + fmtUSD(r.totalUSD) +
       " · $" + fmtUSD(r.rangeLowUSD) + " – $" + fmtUSD(r.rangeHighUSD);
+    els.priceCommercial.textContent = "S/ " + fmt(r.total);
+    els.priceRealization.textContent = "S/ " + fmt(r.realizationTotal) +
+      " · ≈ USD " + fmtUSD(r.realizationTotalUSD);
     els.priceRange.textContent = "Rango probable: S/ " + fmt(r.rangeLow) +
       " — S/ " + fmt(r.rangeHigh);
     els.perM2.textContent = "Precio m² efectivo: S/ " + fmt(r.effectivePerM2);
@@ -295,10 +430,11 @@
     const seq = ++state.marketSeq;
     state.marketFetching = true;
     els.marketPanel.classList.remove("hidden");
+    closeListingModal();
     els.marketBadge.textContent = "Buscando…";
     els.marketBadge.className = "market-badge loading";
-    els.marketSub.textContent = "Revisando avisos reales de Adondevivir y Urbania en " +
-      (loc.district || loc.city) + "…";
+    els.marketSub.textContent = "Revisando avisos reales de Adondevivir, Urbania y Remax en " +
+      (loc.district || loc.city) + "… esto puede tardar 20–60 s.";
 
     try {
       const params = new URLSearchParams({
@@ -306,7 +442,14 @@
         city: loc.city || "",
         type: type
       });
-      const res = await fetch("/api/comparables?" + params.toString());
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 95000);
+      let res;
+      try {
+        res = await fetch("/api/comparables?" + params.toString(), { signal: ctrl.signal });
+      } finally {
+        clearTimeout(timer);
+      }
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
       if (seq !== state.marketSeq || !state.location) return;
@@ -354,24 +497,152 @@
       : "No se encontraron avisos de " + type + "s en la zona. Se usa la base estática.";
 
     els.marketList.innerHTML = "";
-    const items = data.listings.slice(0, 6);
-    items.forEach((l) => {
+    data.listings.forEach((l) => {
       const li = document.createElement("li");
+      li.className = "market-item";
+      const meta = [];
+      if (l.area) meta.push(l.area + " m²");
+      if (l.bedrooms != null) meta.push(l.bedrooms + " dorm.");
+      if (l.bathrooms != null) meta.push(l.bathrooms + " baños");
+      if (l.title) meta.push(l.title);
       const p = document.createElement("div");
       p.className = "m-price";
-      p.innerHTML = "S/ " + fmt(l.price) + " <small>" + (l.title || "") + "</small>";
+      p.innerHTML = "S/ " + fmt(l.price) + " <small>" + meta.join(" · ") + "</small>";
       const m = document.createElement("div");
       m.className = "m-m2";
       m.textContent = "S/ " + fmt(l.pricePerM2) + "/m²";
       const tag = document.createElement("span");
       tag.className = "m-tag";
       tag.textContent = l.source;
-      m.appendChild(document.createElement("br"));
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "m-tasar";
+      btn.textContent = "Tasar";
+      btn.addEventListener("click", () => openListingValuation(l));
       li.appendChild(p);
       li.appendChild(m);
       li.appendChild(tag);
+      li.appendChild(btn);
       els.marketList.appendChild(li);
     });
+  }
+
+  /* ---------------- Modal de publicación y tasación ---------------- */
+  function closeListingModal() {
+    els.listingModal.classList.add("hidden");
+    document.body.classList.remove("no-scroll");
+  }
+
+  function openListingValuation(l) {
+    els.listingModal.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
+    els.lmSource.textContent = l.source + " · publicación del aviso";
+    renderListingModal(l, null);
+    if (!state.location) return;
+    const current = readInputs();
+    const inputs = {
+      ...current,
+      area: l.area || current.area,
+      bedrooms: l.bedrooms != null ? l.bedrooms : current.bedrooms,
+      bathrooms: l.bathrooms != null ? l.bathrooms : current.bathrooms
+    };
+    const r = computeValuation(state.location, inputs, state.market, state.envProfile);
+    renderListingModal(l, r);
+
+    if (l.url) {
+      fetch("/api/listing-detail?url=" + encodeURIComponent(l.url))
+        .then((res) => res.json())
+        .then((d) => {
+          if (els.listingModal.classList.contains("hidden")) return;
+          renderListingModal(l, r, d);
+        })
+        .catch(() => {});
+    }
+  }
+
+  function renderListingModal(l, r, detail) {
+    const meta = [];
+    if (l.area) meta.push(l.area + " m²");
+    if (l.bedrooms != null) meta.push(l.bedrooms + " dorm.");
+    if (l.bathrooms != null) meta.push(l.bathrooms + " baños");
+    if (l.title) meta.push(l.title);
+
+    const images = detail ? detail.images : l.image ? [l.image] : [];
+    const gal = images.length
+      ? '<div class="lm-gallery"><img class="lm-main" src="' + esc(images[0]) +
+        '" alt="Publicación" onerror="this.closest(\'.lm-gallery\').style.display=\'none\'">' +
+        (images.length > 1
+          ? '<div class="lm-thumbs">' + images.slice(1, 6).map((s) =>
+              '<img src="' + esc(s) + '" alt="Foto" loading="lazy" onerror="this.style.display=\'none\'">'
+            ).join("") + "</div>"
+          : "") +
+        "</div>"
+      : '<div class="lm-gallery lm-placeholder">Sin imágenes disponibles</div>';
+
+    const priceBlock = r
+      ? '<div class="lm-prices">' +
+          '<div class="lm-ask"><span class="lm-k">Precio pedido (portal)</span>' +
+          '<span class="lm-ask-v">S/ ' + fmt(l.price) + '</span>' +
+          '<span class="lm-ask-m2">S/ ' + fmt(l.pricePerM2) + '/m²</span></div>' +
+          '<div class="lm-est"><span class="lm-k">Tasación estimada (IA)</span>' +
+          '<span class="lm-est-v">S/ ' + fmt(r.total) + '</span>' +
+          '<span class="lm-est-m2">≈ USD ' + fmtUSD(r.totalUSD) + ' · rango S/ ' +
+          fmt(r.rangeLow) + ' – S/ ' + fmt(r.rangeHigh) + '</span>' +
+          '<span class="lm-real">Valor de realización: S/ ' + fmt(r.realizationTotal) +
+          ' · ≈ USD ' + fmtUSD(r.realizationTotalUSD) + '</span></div>' +
+        "</div>" +
+        deltaHtml(l, r) +
+        whyHtml(r)
+      : '<div class="lm-prices"><div class="lm-ask"><span class="lm-k">Precio pedido (portal)</span>' +
+        '<span class="lm-ask-v">S/ ' + fmt(l.price) + '</span></div></div>';
+
+    const detailHtml =
+      detail && detail.description
+        ? '<p class="lm-desc">' + esc(detail.description) + "</p>"
+        : "";
+
+    const openBtn = l.url
+      ? '<a class="lm-open" href="' + esc(l.url) + '" target="_blank" rel="noopener">Ver publicación original ↗</a>'
+      : "";
+
+    els.lmBody.innerHTML =
+      '<div class="lm-grid">' +
+        '<div class="lm-media">' + gal + openBtn + "</div>" +
+        '<div class="lm-info">' +
+          '<h4>' + esc(meta.join(" · ")) + "</h4>" +
+          priceBlock +
+          detailHtml +
+        "</div>" +
+      "</div>";
+  }
+
+  function deltaHtml(l, r) {
+    const diffPct = (l.price / r.total - 1) * 100;
+    if (diffPct > 5) {
+      return '<p class="lm-delta warn">El precio pedido está ' + Math.round(diffPct) +
+        "% por encima de la tasación. Los portales suelen incluir comisiones y margen de negociación.</p>";
+    }
+    if (diffPct < -5) {
+      return '<p class="lm-delta good">El aviso está ' + Math.abs(Math.round(diffPct)) +
+        "% por debajo de la tasación estimada. Posible oportunidad.</p>";
+    }
+    return '<p class="lm-delta">El precio pedido está alineado con la tasación estimada.</p>';
+  }
+
+  function whyHtml(r) {
+    const env = state.envProfile;
+    const envNote = env && env.rationale ? esc(env.rationale) : "";
+    const factor = r.factors[0];
+    const mktNote = "Tasación referencial: S/ " + fmt(r.effectivePerM2) + "/m² × " + r.area +
+      " m² · " + (factor ? factor.label : "") + " · factor de entorno ×" + r.envFactor.toFixed(2) + ".";
+    return '<div class="lm-why"><strong>Por qué</strong>' +
+      (envNote ? "<p>" + envNote + "</p>" : "") +
+      "<p>" + mktNote + "</p></div>";
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   /* ---------------- Animación del precio ---------------- */
@@ -390,5 +661,74 @@
     requestAnimationFrame(tick);
   }
 
+  /* ---------------- Entorno socioeconómico (IA) ---------------- */
+  let envSeq = 0;
+  async function fetchEnvironment() {
+    const loc = state.location;
+    if (!loc || (!loc.district && !loc.city)) return;
+    const seq = ++envSeq;
+    els.envPanel.classList.remove("hidden");
+    els.envBadge.textContent = "…";
+    els.envBadge.className = "env-badge loading";
+    els.envSub.textContent = "Analizando el entorno con IA…";
+    els.envAmenities.textContent = "—";
+    els.envServices.textContent = "—";
+    els.envFactorVal.textContent = "×1.00";
+    els.envWhy.textContent = "";
+
+    try {
+      const params = new URLSearchParams({
+        district: loc.district || "",
+        city: loc.city || "",
+        lat: loc.lat != null ? loc.lat : "",
+        lon: loc.lon != null ? loc.lon : ""
+      });
+      const res = await fetch("/api/environment?" + params.toString());
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (seq !== envSeq || !state.location) return;
+      state.envProfile = data;
+      renderEnvironment(data);
+      recompute();
+    } catch (e) {
+      if (seq !== envSeq) return;
+      state.envProfile = null;
+      els.envPanel.classList.add("hidden");
+    }
+  }
+
+  function renderEnvironment(env) {
+    if (env.enabled === false) {
+      els.envBadge.textContent = "Estándar";
+      els.envBadge.className = "env-badge media";
+      els.envSub.textContent = "IA de entorno no disponible; se aplica factor neutro (×1.00).";
+      els.envAmenities.textContent = "—";
+      els.envServices.textContent = "—";
+      els.envFactorVal.textContent = "×1.00";
+      els.envWhy.textContent = env.reason || "";
+      return;
+    }
+    const badgeClass = { A: "alta", B: "alta", C: "media", D: "baja", E: "baja" }[env.nse] || "media";
+    els.envBadge.textContent = env.nseLabel || "Medio";
+    els.envBadge.className = "env-badge " + badgeClass;
+    const zonaLabels = {
+      premium: "Premium / frente al mar / exclusiva",
+      central: "Céntrica / consolidada",
+      normal: "Zona residencial estándar",
+      periferia: "Periférica / en expansión"
+    };
+    if (env.zona && zonaLabels[env.zona] && !state.zoneTouched) {
+      els.zona.value = env.zona;
+    }
+    els.envSub.textContent = "Entorno clasificado por IA con base en nivel socioeconómico, " +
+      "equipamiento comercial y servicios del distrito." +
+      (env.zona && zonaLabels[env.zona] ? " Zona interna: " + zonaLabels[env.zona] + "." : "");
+    els.envAmenities.textContent = env.amenities != null ? env.amenities + "/5" : "—";
+    els.envServices.textContent = env.services != null ? env.services + "/5" : "—";
+    els.envFactorVal.textContent = "×" + env.environmentFactor.toFixed(2);
+    els.envWhy.textContent = env.rationale || "";
+  }
+
+  renderFields();
   window.__test = { recompute, applyPlace, applyReverse };
 })();

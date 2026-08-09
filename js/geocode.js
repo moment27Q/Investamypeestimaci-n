@@ -1,31 +1,39 @@
 const GEO = {
-  searchUrl: "https://nominatim.openstreetmap.org/search",
-  reverseUrl: "https://nominatim.openstreetmap.org/reverse",
-  lastRequest: 0,
-
-  async _fetch(url) {
-    const now = Date.now();
-    const wait = Math.max(0, 1000 - (now - this.lastRequest));
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    this.lastRequest = Date.now();
-    const res = await fetch(url, {
-      headers: { "Accept": "application/json" },
-    });
-    if (!res.ok) throw new Error("Error de geocodificación (" + res.status + ")");
-    return res.json();
-  },
-
   async search(query) {
-    const q = encodeURIComponent(query);
-    const url = this.searchUrl +
-      "?format=jsonv2&addressdetails=1&countrycodes=pe&limit=6&accept-language=es&q=" + q;
-    return this._fetch(url);
+    const res = await fetch("/api/geocode?q=" + encodeURIComponent(query), {
+      headers: { "Accept": "application/json" }
+    });
+    if (!res.ok) throw new Error("Geocoder HTTP " + res.status);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data || [];
   },
 
   async reverse(lat, lon) {
-    const url = this.reverseUrl +
-      "?format=jsonv2&addressdetails=1&accept-language=es&lat=" + lat + "&lon=" + lon;
-    return this._fetch(url);
+    const res = await fetch("/api/reverse?lat=" + lat + "&lon=" + lon, {
+      headers: { "Accept": "application/json" }
+    });
+    if (!res.ok) throw new Error("Geocoder HTTP " + res.status);
+    const data = await res.json();
+    if (data.error || !data.lat) throw new Error(data.error || "Sin resultado");
+    return data;
+  },
+
+  formatAddress(a, name) {
+    if (!a) return name || "Ubicación";
+    const parts = [];
+    const street = a.road || a.pedestrian || a.path || a.residential || a.cycleway;
+    if (street) {
+      parts.push((a.house_number ? a.house_number + " " : "") + street);
+    } else if (a.house_number) {
+      parts.push(a.house_number);
+    }
+    const zone = a.suburb || a.neighbourhood || a.city_district || a.municipality || a.town;
+    if (zone) parts.push(zone);
+    if (a.city && a.city !== zone) parts.push(a.city);
+    if (a.state && a.state !== a.city && a.state !== zone) parts.push(a.state);
+    if (a.country && a.country !== "Perú" && a.country !== "Peru") parts.push(a.country);
+    return parts.join(", ") || name || "Ubicación";
   },
 
   parseAddress(addr) {
@@ -50,6 +58,16 @@ const GEO = {
     };
   }
 };
+function prioritizePlaces(places) {
+  const addr = [];
+  const other = [];
+  for (const p of places) {
+    const a = p.address || {};
+    if (a.road || a.house_number) addr.push(p);
+    else other.push(p);
+  }
+  return addr.concat(other);
+}
 
 function normalize(s) {
   return (s || "")
@@ -97,7 +115,6 @@ function placeToLocation(place) {
   }
 
   if (!district) {
-    // Reintentar con ciudad
     city = matchCityName([
       p.city, p.town, p.suburb, p.municipality, p.city_district, p.county
     ]);
