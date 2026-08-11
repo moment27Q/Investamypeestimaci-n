@@ -500,7 +500,7 @@
         type: type
       });
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 95000);
+      const timer = setTimeout(() => ctrl.abort(), 120000);
       let res;
       try {
         res = await fetch("/api/comparables?" + params.toString(), { signal: ctrl.signal });
@@ -619,7 +619,7 @@
         type: type
       });
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 95000);
+      const timer = setTimeout(() => ctrl.abort(), 120000);
       let res;
       try {
         res = await fetch("/api/rentals?" + params.toString(), { signal: ctrl.signal });
@@ -727,7 +727,7 @@
         city: loc.city || ""
       });
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 60000);
+      const timer = setTimeout(() => ctrl.abort(), 90000);
       let res;
       try {
         res = await fetch("/api/nexo?" + params.toString(), { signal: ctrl.signal });
@@ -742,7 +742,7 @@
       if (seq !== state.nexoSeq) return;
       els.nexoBadge.textContent = "Sin datos";
       els.nexoBadge.className = "nexo-badge empty";
-      els.nexoSub.textContent = "No se pudieron obtener proyectos de Nexo Inmobiliario ahora.";
+      els.nexoSub.textContent = "El portal de proyectos no respondió o bloqueó la consulta; vuelve a buscar para reintentar.";
       els.nexoList.innerHTML = "";
       els.nexoLink.textContent = "Proyectos nuevos ↗";
       els.nexoAll.classList.add("hidden");

@@ -42,6 +42,12 @@ const MIME = {
 const server = http.createServer((req, res) => {
   const parsed = url.parse(req.url, true);
 
+  if (parsed.pathname === "/healthz") {
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: true, uptime: Math.round(process.uptime()) }));
+    return;
+  }
+
   if (parsed.pathname === "/api/geocode") {
     const q = (parsed.query.q || "").trim();
     if (!q) {

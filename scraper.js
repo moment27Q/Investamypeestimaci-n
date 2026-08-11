@@ -3,7 +3,7 @@
 const { chromium } = require("playwright");
 
 const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 const TYPE_SLUG = {
   departamento: "departamentos",
@@ -23,11 +23,86 @@ function getBrowser() {
       args: [
         "--disable-blink-features=AutomationControlled",
         "--no-sandbox",
-        "--disable-dev-shm-usage"
+        "--disable-dev-shm-usage",
+        "--disable-features=IsolateOrigins,site-per-process",
+        "--lang=es-PE"
       ]
     });
   }
   return browserPromise;
+}
+
+async function newStealthPage(browser) {
+  const page = await browser.newPage({ userAgent: UA, locale: "es-PE", viewport: { width: 1280, height: 900 } });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+    window.chrome = window.chrome || { runtime: {} };
+    Object.defineProperty(navigator, "languages", { get: () => ["es-ES", "es", "en-US", "en"] });
+    Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
+    const origQuery = window.navigator.permissions && window.navigator.permissions.query;
+    if (origQuery) {
+      window.navigator.permissions.query = (p) =>
+        p && p.name === "notifications"
+          ? Promise.resolve({ state: Notification.permission })
+          : origQuery(p);
+    }
+  });
+  return page;
+}
+
+async function hasChallenge(page) {
+  try {
+    return await page.evaluate(() => {
+      const t = (document.title || "").toLowerCase();
+      if (/just a moment|attention required|verificando|please verify|one more step|checking your browser/i.test(t)) {
+        return true;
+      }
+      if (document.querySelector(
+        "#challenge-running, #challenge-form, [id*='challenge'], [class*='challenge-running'], " +
+        "iframe[src*='challenges.cloudflare.com'], [class*='cf-browser-verification']"
+      )) return true;
+      const head = (document.body && document.body.innerText || "").slice(0, 400);
+      if (/attention required!|checking your browser|verificando que eres humano|cf-browser-verification|enable javascript and cookies/i.test(head)) {
+        return true;
+      }
+      return false;
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
+async function navigate(page, url, timeout) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    let resp = null;
+    try {
+      resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeout || 40000 });
+    } catch (e) {
+      if (attempt === 1) { await page.waitForTimeout(1500); continue; }
+      return false;
+    }
+    await page.waitForTimeout(2500 + Math.floor(Math.random() * 1200));
+
+    if (await hasChallenge(page)) {
+      let waited = 0;
+      while (waited < 8000 && (await hasChallenge(page))) {
+        await page.waitForTimeout(1000);
+        waited += 1000;
+      }
+      if (await hasChallenge(page)) {
+        if (attempt === 1) { await page.waitForTimeout(1200); continue; }
+        return false;
+      }
+    }
+
+    const status = resp ? resp.status() : 200;
+    if ((status === 403 || status === 429 || status === 503) && attempt === 1) {
+      await page.waitForTimeout(1500);
+      continue;
+    }
+    return status >= 200 && status < 400;
+  }
+  return false;
 }
 
 function slugify(name) {
@@ -189,10 +264,11 @@ function parseRentCardText(text) {
 }
 
 async function scrapePage(browser, url) {
-  const page = await browser.newPage({ userAgent: UA, locale: "es-PE", viewport: { width: 1280, height: 900 } });
+  const page = await newStealthPage(browser);
   try {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 40000 });
-    await page.waitForTimeout(4000);
+    const ok = await navigate(page, url, 40000);
+    if (!ok) return [];
+    await page.waitForTimeout(1500);
 
     // Scroll para cargar avisos perezosos
     for (let i = 0; i < 7; i++) {
@@ -247,10 +323,11 @@ async function scrapePage(browser, url) {
 }
 
 async function scrapeRentPage(browser, url) {
-  const page = await browser.newPage({ userAgent: UA, locale: "es-PE", viewport: { width: 1280, height: 900 } });
+  const page = await newStealthPage(browser);
   try {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 40000 });
-    await page.waitForTimeout(4000);
+    const ok = await navigate(page, url, 40000);
+    if (!ok) return [];
+    await page.waitForTimeout(1500);
 
     for (let i = 0; i < 7; i++) {
       await page.mouse.wheel(0, 2500);
@@ -404,10 +481,11 @@ async function scrapeRemax(browser, query) {
   const type = query.type || "departamento";
   const isLimaDistrict = query.district ? DATA_DISTRICTS_SET.has(query.district) : false;
 
-  const page = await browser.newPage({ userAgent: UA, locale: "es-PE", viewport: { width: 1280, height: 900 } });
+  const page = await newStealthPage(browser);
   try {
-    await page.goto(REMAX_BASE, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await page.waitForTimeout(3500);
+    const ok = await navigate(page, REMAX_BASE, 45000);
+    if (!ok) return [];
+    await page.waitForTimeout(1500);
 
     const input = page.locator('input[placeholder*="Buscar por"]');
     if (!(await input.count())) return [];
@@ -704,10 +782,11 @@ function parseNexoItem(j) {
 async function scrapeNexo(browser, query) {
   const url = buildNexoUrl(query);
   if (!url) return [];
-  const page = await browser.newPage({ userAgent: UA, locale: "es-PE", viewport: { width: 1280, height: 900 } });
+  const page = await newStealthPage(browser);
   try {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await page.waitForTimeout(4500);
+    const ok = await navigate(page, url, 45000);
+    if (!ok) return [];
+    await page.waitForTimeout(1500);
 
     // Scroll para cargar páginas adicionales del listado (infinite scroll)
     let prev = 0;
@@ -806,10 +885,11 @@ async function getNexoProjects(query) {
 /* ------------------------------------------------------------------ */
 async function getListingDetail(url) {
   const browser = await getBrowser();
-  const page = await browser.newPage({ userAgent: UA, locale: "es-PE", viewport: { width: 1280, height: 900 } });
+  const page = await newStealthPage(browser);
   try {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 40000 });
-    await page.waitForTimeout(3000);
+    const ok = await navigate(page, url, 40000);
+    if (!ok) return { url: url, images: [], title: "", description: "" };
+    await page.waitForTimeout(1500);
     for (let i = 0; i < 5; i++) {
       await page.mouse.wheel(0, 2000);
       await page.waitForTimeout(500);

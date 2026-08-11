@@ -36,6 +36,22 @@ Abre **http://localhost:3000**
 
 > **Importante:** el servidor Node (`npm start`) es obligatorio para el módulo de precios de mercado. Si abres `index.html` directamente (o con `python3 -m http.server`), la tasación sigue funcionando pero solo con la base estática.
 
+## Deploy en Render
+
+Hay un blueprint `render.yaml` listo: **Dashboard → New → Blueprint**, conéctalo al repo y Render creará el servicio. Pasos:
+
+1. **Variables de entorno** (Dashboard → tu servicio → Environment):
+   - `GROK_API_KEY`: tu clave de Groq (el módulo "Entorno socioeconómico"). Render ya la marca como secreta (`sync: false`).
+   - `GROK_MODEL` (opcional): por defecto `llama-3.3-70b-versatile`.
+   - `PORT`: Render la inyecta sola.
+2. **Build**: `npm install && npx playwright install --with-deps chromium` (instala Chromium con sus dependencias para el scraping).
+3. **Start**: `npm start`. **Health check**: `/healthz`.
+
+Consejos:
+- El plan **Free** funciona pero la instancia se duerme a los ~15 min sin tráfico (la primera búsqueda tarda más en "despertar"). Para búsquedas siempre rápidas usa un plan de pago (Starter $7/mes).
+- El scraping (Urbania, Adondevivir, Nexo) se hace desde IP de datacenter; algunos portales pueden mostrar desafíos anti-bot. El scraper tiene **stealth + reintentos automáticos** y, si el portal bloquea, la app degrada a la base estática sin romperse.
+- La clave de Groq **no va en el código**: se lee de `.env` (local, gitignored) o de la variable de entorno de Render. Copia `.env.example` a `.env` para desarrollo local.
+
 ## Cómo usarlo
 
 1. Pega una dirección (ej. *Av. Larco 123, Miraflores, Lima*) y elige en el autocompletado, **o** haz clic en el mapa, **o** pulsa el botón de ubicación GPS.

@@ -118,7 +118,7 @@
     try {
       const p = new URLSearchParams({ district: loc.district || "", city: loc.city || "", all: "1" });
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 60000);
+      const timer = setTimeout(() => ctrl.abort(), 90000);
       let res;
       try {
         res = await fetch("/api/nexo?" + p.toString(), { signal: ctrl.signal });
@@ -131,8 +131,16 @@
       render(data);
     } catch (e) {
       if (mySeq !== seq) return;
-      showStatus("No se pudieron obtener proyectos de Nexo Inmobiliario. Intenta de nuevo.", true);
+      showError("El portal de proyectos no respondió o bloqueó la consulta. Pulsa Reintentar para volver a intentarlo.");
     }
+  }
+
+  function showError(msg) {
+    els.status.classList.remove("hidden");
+    els.status.classList.add("error");
+    els.status.innerHTML = msg + ' <button type="button" class="retry-btn" id="retryBtn">Reintentar</button>';
+    const btn = document.getElementById("retryBtn");
+    if (btn) btn.addEventListener("click", () => fetchProjects());
   }
 
   function render(data) {
