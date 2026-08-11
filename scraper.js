@@ -32,6 +32,21 @@ function getBrowser() {
   return browserPromise;
 }
 
+async function safeBrowser() {
+  try {
+    let browser = await getBrowser();
+    if (!browser.isConnected()) {
+      browserPromise = null;
+      browser = await getBrowser();
+    }
+    return browser;
+  } catch (e) {
+    console.log("[scraper] error lanzando Chromium →", e.message);
+    browserPromise = null;
+    return null;
+  }
+}
+
 async function newStealthPage(browser) {
   const page = await browser.newPage({ userAgent: UA, locale: "es-PE", viewport: { width: 1280, height: 900 } });
   await page.addInitScript(() => {
@@ -316,6 +331,7 @@ async function scrapePage(browser, url) {
     }
     return listings;
   } catch (e) {
+    console.log("[scraper] scrapePage falló para", url, "→", e.message);
     return [];
   } finally {
     await page.close().catch(() => {});
@@ -374,6 +390,7 @@ async function scrapeRentPage(browser, url) {
     }
     return listings;
   } catch (e) {
+    console.log("[scraper] scrapeRentPage falló para", url, "→", e.message);
     return [];
   } finally {
     await page.close().catch(() => {});
@@ -573,6 +590,7 @@ async function scrapeRemax(browser, query) {
     }
     return listings;
   } catch (e) {
+    console.log("[scraper] scrapeRemax falló →", e.message);
     return [];
   } finally {
     await page.close().catch(() => {});
@@ -597,10 +615,9 @@ async function getComparables(query) {
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     lastScrapeAt = Date.now();
 
-    let browser = await getBrowser();
-    if (!browser.isConnected()) {
-      browserPromise = null;
-      browser = await getBrowser();
+    const browser = await safeBrowser();
+    if (!browser) {
+      return { district: query.district || null, city: query.city || null, type: query.type || "departamento", count: 0, medianPerM2: null, medianArea: null, minPerM2: null, maxPerM2: null, sources: [], listings: [], fetchedAt: new Date().toISOString(), error: "Chromium no pudo iniciarse (revisa los logs)" };
     }
 
     const urls = buildUrls(query);
@@ -665,10 +682,9 @@ async function getRentals(query) {
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     lastScrapeAt = Date.now();
 
-    let browser = await getBrowser();
-    if (!browser.isConnected()) {
-      browserPromise = null;
-      browser = await getBrowser();
+    const browser = await safeBrowser();
+    if (!browser) {
+      return { district: query.district || null, city: query.city || null, type: query.type || "departamento", count: 0, medianRent: null, medianRentPerM2: null, medianArea: null, minRent: null, maxRent: null, minRentPerM2: null, maxRentPerM2: null, sources: [], listings: [], fetchedAt: new Date().toISOString(), error: "Chromium no pudo iniciarse (revisa los logs)" };
     }
 
     const urls = buildRentUrls(query);
@@ -826,6 +842,7 @@ async function scrapeNexo(browser, query) {
     });
     return projects;
   } catch (e) {
+    console.log("[scraper] scrapeNexo falló para", url, "→", e.message);
     return [];
   } finally {
     await page.close().catch(() => {});
@@ -848,10 +865,9 @@ async function getNexoProjects(query) {
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     lastScrapeAt = Date.now();
 
-    let browser = await getBrowser();
-    if (!browser.isConnected()) {
-      browserPromise = null;
-      browser = await getBrowser();
+    const browser = await safeBrowser();
+    if (!browser) {
+      return { district: query.district || null, city: query.city || null, count: 0, minPrice: null, maxPrice: null, projects: [], fetchedAt: new Date().toISOString(), error: "Chromium no pudo iniciarse (revisa los logs)" };
     }
 
     const projects = await scrapeNexo(browser, query);
@@ -918,6 +934,7 @@ async function getListingDetail(url) {
     });
     return { url: url, images: data.imgs, title: data.title, description: data.desc };
   } catch (e) {
+    console.log("[scraper] getListingDetail falló para", url, "→", e.message);
     return { url: url, images: [], title: "", description: "" };
   } finally {
     await page.close().catch(() => {});

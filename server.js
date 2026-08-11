@@ -48,6 +48,40 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (parsed.pathname === "/api/diag") {
+    const os = require("os");
+    const mask = (k) => (k ? k.slice(0, 4) + "…" + k.slice(-4) : "(no configurada)");
+    let chromium = { installed: false, path: null, error: null };
+    try {
+      const pw = require("playwright");
+      const exe = pw.chromium.executablePath();
+      chromium = { installed: fs.existsSync(exe), path: exe, error: null };
+    } catch (e) {
+      chromium.error = e.message;
+    }
+    const aiKey = process.env.XAI_API_KEY || process.env.GROK_API_KEY || process.env.GROQ_API_KEY || "";
+    const diag = {
+      ok: true,
+      uptime: Math.round(process.uptime()),
+      node: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      memoryMB: Math.round(os.totalmem() / 1048576),
+      scraperLoaded: !!(getComparables && getRentals && getNexoProjects),
+      chromium: chromium,
+      env: {
+        aiKey: aiKey ? mask(aiKey) : "(no configurada)",
+        aiKeyName: aiKey ? (aiKey.startsWith("gsk_") ? "Groq" : "xAI") : null,
+        grokModel: process.env.GROK_MODEL || process.env.GROQ_MODEL || "(default)",
+        port: process.env.PORT || "3000",
+        nodeVersionEnv: process.env.NODE_VERSION || "(sin fijar)"
+      }
+    };
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify(diag, null, 2));
+    return;
+  }
+
   if (parsed.pathname === "/api/geocode") {
     const q = (parsed.query.q || "").trim();
     if (!q) {

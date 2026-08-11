@@ -2,10 +2,10 @@
 
 const https = require("https");
 
-const API_KEY = process.env.XAI_API_KEY || process.env.GROK_API_KEY || "";
+const API_KEY = process.env.XAI_API_KEY || process.env.GROK_API_KEY || process.env.GROQ_API_KEY || "";
 const isGroq = API_KEY.startsWith("gsk_");
 const MODEL = isGroq
-  ? process.env.GROK_MODEL || "llama-3.3-70b-versatile"
+  ? process.env.GROK_MODEL || process.env.GROQ_MODEL || "llama-3.3-70b-versatile"
   : process.env.XAI_MODEL || "grok-4.5";
 const API_URL = isGroq
   ? "https://api.groq.com/openai/v1/chat/completions"
@@ -151,7 +151,7 @@ async function getEnvironmentProfile(loc) {
   if (!API_KEY) {
     return {
       enabled: false,
-      reason: "XAI_API_KEY no configurado en el servidor",
+      reason: "GROK_API_KEY (o XAI_API_KEY) no configurado en el servidor",
       environmentFactor: 1
     };
   }

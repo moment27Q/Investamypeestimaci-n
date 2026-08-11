@@ -125,13 +125,17 @@
       } finally {
         clearTimeout(timer);
       }
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (mySeq !== seq) return;
+      if (!res.ok || data.error) {
+        const detail = data.detail || data.error || ("HTTP " + res.status);
+        showError("No se pudieron cargar los proyectos: " + detail);
+        return;
+      }
       render(data);
     } catch (e) {
       if (mySeq !== seq) return;
-      showError("El portal de proyectos no respondió o bloqueó la consulta. Pulsa Reintentar para volver a intentarlo.");
+      showError("El servidor no respondió a tiempo (el portal tardó o bloqueó la consulta). Pulsa Reintentar.");
     }
   }
 

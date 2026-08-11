@@ -52,6 +52,15 @@ Consejos:
 - El scraping (Urbania, Adondevivir, Nexo) se hace desde IP de datacenter; algunos portales pueden mostrar desafíos anti-bot. El scraper tiene **stealth + reintentos automáticos** y, si el portal bloquea, la app degrada a la base estática sin romperse.
 - La clave de Groq **no va en el código**: se lee de `.env` (local, gitignored) o de la variable de entorno de Render. Copia `.env.example` a `.env` para desarrollo local.
 
+### Diagnóstico en producción
+
+El endpoint `GET /api/diag` muestra el estado del servicio: si Playwright/Chromium está instalado, la RAM del contenedor y si la clave de IA está configurada (enmascarada). También revisa los **logs de Render** (Dashboard → servicio → Logs); los fallos del scraper se registran con el prefijo `[scraper]`.
+
+Errores frecuentes:
+- `Chromium no pudo iniciarse` → el **Build Command** no instaló el navegador. Debe ser exactamente `npm install && npx playwright install --with-deps chromium` (Dashboard → service → Settings → Build Command → redeploy).
+- `aiKey: "(no configurada)"` en `/api/diag` → falta `GROK_API_KEY` en Environment → Environment Variables.
+- "El servidor no respondió a tiempo" → la instancia estaba dormida o el portal tardó más que el timeout; pulsa Reintentar.
+
 ## Cómo usarlo
 
 1. Pega una dirección (ej. *Av. Larco 123, Miraflores, Lima*) y elige en el autocompletado, **o** haz clic en el mapa, **o** pulsa el botón de ubicación GPS.

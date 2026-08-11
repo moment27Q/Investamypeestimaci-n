@@ -507,9 +507,21 @@
       } finally {
         clearTimeout(timer);
       }
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (seq !== state.marketSeq || !state.location) return;
+
+      if (!res.ok || data.error) {
+        state.market = null;
+        const detail = data.detail || data.error || ("HTTP " + res.status);
+        els.marketBadge.textContent = "Sin datos";
+        els.marketBadge.className = "market-badge empty";
+        els.marketSub.textContent = "No se pudieron obtener avisos: " + detail + ". Se usa la base estática.";
+        els.marketList.innerHTML = "";
+        state.marketRest = [];
+        els.marketMore.classList.add("hidden");
+        recompute();
+        return;
+      }
 
       state.market = data;
       renderMarket(data, type);
@@ -525,10 +537,11 @@
       state.market = null;
       els.marketBadge.textContent = "Sin datos";
       els.marketBadge.className = "market-badge empty";
-      els.marketSub.textContent = "No se pudieron obtener avisos ahora; se usa la base de datos estática.";
+      els.marketSub.textContent = "El servidor no respondió a tiempo; se usa la base de datos estática.";
       els.marketList.innerHTML = "";
       state.marketRest = [];
       els.marketMore.classList.add("hidden");
+      recompute();
     } finally {
       if (seq === state.marketSeq) state.marketFetching = false;
     }
@@ -626,9 +639,21 @@
       } finally {
         clearTimeout(timer);
       }
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (seq !== state.rentSeq || !state.location) return;
+
+      if (!res.ok || data.error) {
+        state.rentMarket = null;
+        const detail = data.detail || data.error || ("HTTP " + res.status);
+        els.rentalBadge.textContent = "Sin datos";
+        els.rentalBadge.className = "rental-badge empty";
+        els.rentalSub.textContent = "No se pudieron obtener avisos de alquiler: " + detail + ". El estimado usa la base estática.";
+        els.rentalList.innerHTML = "";
+        state.rentRest = [];
+        els.rentalMore.classList.add("hidden");
+        recompute();
+        return;
+      }
 
       state.rentMarket = data;
       renderRentals(data, type);
@@ -638,7 +663,7 @@
       state.rentMarket = null;
       els.rentalBadge.textContent = "Sin datos";
       els.rentalBadge.className = "rental-badge empty";
-      els.rentalSub.textContent = "No se pudieron obtener avisos de alquiler; el estimado usa la base estática.";
+      els.rentalSub.textContent = "El servidor no respondió a tiempo; el estimado usa la base estática.";
       els.rentalList.innerHTML = "";
       state.rentRest = [];
       els.rentalMore.classList.add("hidden");
@@ -734,15 +759,19 @@
       } finally {
         clearTimeout(timer);
       }
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (seq !== state.nexoSeq || !state.location) return;
+      if (!res.ok || data.error) {
+        const detail = data.detail || data.error || ("HTTP " + res.status);
+        throw new Error(detail);
+      }
       renderNexo(data);
     } catch (e) {
       if (seq !== state.nexoSeq) return;
       els.nexoBadge.textContent = "Sin datos";
       els.nexoBadge.className = "nexo-badge empty";
-      els.nexoSub.textContent = "El portal de proyectos no respondió o bloqueó la consulta; vuelve a buscar para reintentar.";
+      els.nexoSub.textContent = "No se pudieron cargar los proyectos: " + (e.message || "sin respuesta") +
+        ". Vuelve a buscar para reintentar.";
       els.nexoList.innerHTML = "";
       els.nexoLink.textContent = "Proyectos nuevos ↗";
       els.nexoAll.classList.add("hidden");
