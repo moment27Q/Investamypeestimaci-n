@@ -38,13 +38,13 @@ Abre **http://localhost:3000**
 
 ## Deploy en Render
 
-Hay un blueprint `render.yaml` listo: **Dashboard → New → Blueprint**, conéctalo al repo y Render creará el servicio. Pasos:
+Hay un blueprint `render.yaml` listo: **Dashboard → New → Blueprint**, conéctalo al repo y Render creará el servicio. El servicio usa **Docker** (`Dockerfile`): Render no permite `su root`, así que Playwright con `--with-deps` falla en su build de Node; el Dockerfile instala Chromium y sus dependencias del sistema correctamente. Pasos:
 
 1. **Variables de entorno** (Dashboard → tu servicio → Environment):
    - `GROK_API_KEY`: tu clave de Groq (el módulo "Entorno socioeconómico"). Render ya la marca como secreta (`sync: false`).
    - `GROK_MODEL` (opcional): por defecto `llama-3.3-70b-versatile`.
    - `PORT`: Render la inyecta sola.
-2. **Build**: `npm install && npx playwright install --with-deps chromium` (instala Chromium con sus dependencias para el scraping).
+2. **Runtime**: el servicio debe estar en **Docker** (Settings → Runtime → Docker). El `Dockerfile` hace el `npm install` y la descarga de Chromium; no hace falta Build Command.
 3. **Start**: `npm start`. **Health check**: `/healthz`.
 
 Consejos:
@@ -57,7 +57,8 @@ Consejos:
 El endpoint `GET /api/diag` muestra el estado del servicio: si Playwright/Chromium está instalado, la RAM del contenedor y si la clave de IA está configurada (enmascarada). También revisa los **logs de Render** (Dashboard → servicio → Logs); los fallos del scraper se registran con el prefijo `[scraper]`.
 
 Errores frecuentes:
-- `Chromium no pudo iniciarse` → el **Build Command** no instaló el navegador. Debe ser exactamente `npm install && npx playwright install --with-deps chromium` (Dashboard → service → Settings → Build Command → redeploy).
+- El build falla con `su: Authentication failure` al instalar Playwright → es el build de **Node** de Render, que no permite `su root`. Cambia el servicio a **Docker** (Settings → Runtime → Docker) para que use el `Dockerfile` del repo.
+- `Chromium no pudo iniciarse` en los logs → revisa que el runtime sea Docker y que el `Dockerfile` esté en la raíz del repo; el log debe mostrar la descarga de Chromium durante el build.
 - `aiKey: "(no configurada)"` en `/api/diag` → falta `GROK_API_KEY` en Environment → Environment Variables.
 - "El servidor no respondió a tiempo" → la instancia estaba dormida o el portal tardó más que el timeout; pulsa Reintentar.
 

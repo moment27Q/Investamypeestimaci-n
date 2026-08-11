@@ -1,21 +1,18 @@
 # Blueprint de Render: conecta el repo y Render crea el Web Service.
-# Más info: https://render.com/docs/blueprint-spec
+# Usa runtime docker porque Render no permite "su root" (el --with-deps de
+# Playwright falla en runtime: node). El Dockerfile instala Chromium + deps.
 services:
   - type: web
     name: tasador-peru
-    runtime: node
+    runtime: docker
     plan: free
     region: ohio
-    buildCommand: npm install && npx playwright install --with-deps chromium
-    startCommand: npm start
     healthCheckPath: /healthz
     envVars:
-      - key: NODE_VERSION
-        value: 20.x
       - key: GROK_MODEL
         value: llama-3.3-70b-versatile
       # Clave secreta: en el panel de Render (Dashboard > tu servicio > Environment)
-      # pulsa "New Environment Group" / "Add Environment Variable" y pega tu clave
-      # con valor GROK_API_KEY. Con sync:false, Render la pide al desplegar.
+      # pulsa "Add Environment Variable" y pega tu clave con valor GROK_API_KEY.
+      # Con sync:false, Render la pide al desplegar.
       - key: GROK_API_KEY
         sync: false
