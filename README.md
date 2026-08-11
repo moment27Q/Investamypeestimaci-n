@@ -17,6 +17,7 @@ Valor = **precio por m² base** × **área** × ajustes hedónicos
 4. **Smart defaults**: si no tocas el área, se auto-rellena con la **mediana del área de los avisos reales** de la zona.
 5. Resultado con **rango de confianza (±8%)**, precio en S/ y USD, **panel de avisos de mercado** con la lista de comparables reales, y desglose transparente de cada factor.
 6. **Alquiler mensual estimado**: además del valor de venta, la app muestra el **alquiler mensual estimado** (S/ y USD) calculado con la **mediana real de rentas de Urbania y Adondevivir** (S//m²/mes) del distrito, combinada con una base estática de rendimiento, y aplicando los ajustes hedónicos suavizados. Incluye su propio panel de avisos de alquiler con la mediana y el rango por m².
+7. **Proyectos nuevos (Nexo Inmobiliario)**: la app extrae los **proyectos nuevos en venta** (departamentos en planos, en construcción y entrega inmediata) publicados en **Nexo Inmobiliario** (nexoinmobiliario.pe, portal de CODIP) para el distrito detectado, con su precio "desde", rango de áreas, dormitorios, etapa y la inmobiliaria. Cada proyecto se puede abrir para ver imágenes y enlace a la publicación original.
 
 ## Requisitos
 
@@ -44,14 +45,16 @@ Abre **http://localhost:3000**
 ## Estructura
 
 ```
-index.html          Interfaz
+index.html          Interfaz principal (tasación + módulo de mercado/alquiler/proyectos)
+proyectos.html      Página dedicada con todos los proyectos nuevos (Nexo) en grilla
 css/styles.css      Estilos
 js/data.js          Base estática de precios m² por distrito/ciudad
 js/valuation.js     Motor de tasación (modelo hedónico + blend de mercado)
 js/geocode.js       Geocodificación Nominatim + detección de distrito
 js/app.js           Lógica de la interfaz (mapa, autocompletado, comparables, cálculo en vivo)
-scraper.js          Extracción de avisos reales de Adondevivir y Urbania (Playwright) + caché
-server.js           Servidor estático + endpoint /api/comparables
+js/proyectos.js     Lógica de la página de proyectos nuevos (búsqueda + grilla + modal)
+scraper.js          Extracción de avisos de Adondevivir, Urbania, RE/MAX y proyectos de Nexo (Playwright) + caché
+server.js           Servidor estático + endpoints /api/comparables, /api/rentals y /api/nexo
 ```
 
 ## Endpoint
@@ -60,7 +63,11 @@ server.js           Servidor estático + endpoint /api/comparables
 
 `GET /api/rentals?district=Miraflores&type=departamento` → `{ count, medianRent, medianRentPerM2, medianArea, minRent, maxRent, minRentPerM2, maxRentPerM2, sources, listings: [...] }`
 
-- Caché en memoria de 10 minutos por distrito+tipo para no saturar los portales (venta y alquiler tienen cachés separadas).
+`GET /api/nexo?district=Miraflores` (o `?city=Arequipa`) → `{ count, minPrice, maxPrice, projects: [...] }`. Por defecto devuelve hasta 30 proyectos; con `&all=1` devuelve el listado completo (hasta 40).
+
+- La página `proyectos.html` muestra todos los proyectos en grilla con búsqueda por distrito/ciudad; el botón "Proyectos nuevos" de la barra y "Ver todos los proyectos" del módulo navegan a ella arrastrando el distrito actual (`?district=...&city=...`).
+
+- Caché en memoria de 10 minutos por distrito+tipo para no saturar los portales (venta, alquiler y Nexo tienen cachés separadas).
 - Resultados que no se pueden scrapear devuelven `count: 0` y la app cae a la base estática.
 
 ## Notas legales y técnicas

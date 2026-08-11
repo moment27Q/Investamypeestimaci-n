@@ -642,6 +642,166 @@ async function getRentals(query) {
 }
 
 /* ------------------------------------------------------------------ */
+/* NEXO Inmobiliario (nexoinmobiliario.pe) — proyectos nuevos          */
+/* ------------------------------------------------------------------ */
+
+const NEXO_PHASE = { "1": "En planos", "2": "En construcción", "3": "Entrega inmediata" };
+
+// Algunos distritos usan slugs propios en Nexo
+const NEXO_DISTRICT_SLUGS = {
+  "Rímac": "el-rimac",
+  "Rimac": "el-rimac"
+};
+
+function buildNexoUrl(query) {
+  const name = query.district || query.city;
+  if (!name) return null;
+  const slug = NEXO_DISTRICT_SLUGS[name] || slugify(name);
+  return "https://nexoinmobiliario.pe/departamentos/departamentos-" + slug;
+}
+
+function normalizeNexo(s) {
+  return (s || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function nexoMatchesLocation(j, query) {
+  const name = normalizeNexo(query.district || query.city);
+  if (!name) return true;
+  const hay = normalizeNexo([j.distrito, j.provincia_project, j.dpto_project].join(" "));
+  return hay.includes(name);
+}
+
+function parseNexoItem(j) {
+  if (!j || !j.project_id) return null;
+  const coin = (j.coin || "S/.").trim();
+  let priceFrom = parseFloat(j.min_price);
+  if (!(priceFrom > 0)) return null;
+  if (coin === "$") priceFrom = Math.round(priceFrom * USD_FX);
+  if (priceFrom < 20000 || priceFrom > 30000000) return null;
+  const areaMin = parseFloat(j.area_min);
+  const areaMax = parseFloat(j.area_max);
+  return {
+    id: String(j.project_id),
+    name: (j.name || "").replace(/\s+/g, " ").trim().slice(0, 80),
+    priceFrom: priceFrom,
+    coin: coin === "$" ? "$" : "S/",
+    areaMin: isNaN(areaMin) ? null : Math.round(areaMin),
+    areaMax: isNaN(areaMax) ? null : Math.round(areaMax),
+    bedroomsMin: parseInt(j.room_min, 10) || null,
+    bedroomsMax: parseInt(j.room_max, 10) || null,
+    phase: NEXO_PHASE[j.project_phase] || "Nuevo",
+    distrito: (j.distrito || "").trim(),
+    direccion: (j.direccion || "").trim(),
+    builder: (j.builder_name || "").trim(),
+    image: j.image ? "https://e.nexoinmobiliario.pe/customers/" + j.image : "",
+    url: j.url || "",
+    dateCreation: j.date_creation || ""
+  };
+}
+
+async function scrapeNexo(browser, query) {
+  const url = buildNexoUrl(query);
+  if (!url) return [];
+  const page = await browser.newPage({ userAgent: UA, locale: "es-PE", viewport: { width: 1280, height: 900 } });
+  try {
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.waitForTimeout(4500);
+
+    // Scroll para cargar páginas adicionales del listado (infinite scroll)
+    let prev = 0;
+    for (let i = 0; i < 30; i++) {
+      await page.mouse.wheel(0, 3000);
+      await page.waitForTimeout(600);
+      if (i % 3 === 0) {
+        const c = await page.evaluate(() => document.querySelectorAll("article .dataItem").length);
+        if (c === prev && i > 2) break;
+        prev = c;
+      }
+    }
+    await page.waitForTimeout(1500);
+
+    const items = await page.evaluate(() => {
+      const out = [];
+      for (const el of document.querySelectorAll("article .dataItem")) {
+        try { out.push(JSON.parse(el.value)); } catch (e) {}
+      }
+      return out;
+    });
+
+    const projects = [];
+    const seen = new Set();
+    for (const j of items) {
+      const p = parseNexoItem(j);
+      if (!p || !nexoMatchesLocation(j, query)) continue;
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      projects.push(p);
+      if (projects.length >= 40) break;
+    }
+    projects.sort((a, b) => {
+      const da = a.dateCreation, db = b.dateCreation;
+      if (/^\d+$/.test(da) && /^\d+$/.test(db)) return Number(db) - Number(da);
+      return String(db).localeCompare(String(da));
+    });
+    return projects;
+  } catch (e) {
+    return [];
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+async function getNexoProjects(query) {
+  const cacheKey = "nexo::" + [query.district || "", query.city || "", query.all ? "all" : ""].join("::");
+  const now = Date.now();
+  if (NEXO_CACHE.has(cacheKey) && now - NEXO_CACHE.get(cacheKey).fetchedAt < CACHE_TTL) {
+    return NEXO_CACHE.get(cacheKey).data;
+  }
+
+  if (NEXO_IN_FLIGHT.has(cacheKey)) {
+    return NEXO_IN_FLIGHT.get(cacheKey);
+  }
+
+  const run = (async () => {
+    const wait = Math.max(0, 2500 - (now - lastScrapeAt));
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastScrapeAt = Date.now();
+
+    let browser = await getBrowser();
+    if (!browser.isConnected()) {
+      browserPromise = null;
+      browser = await getBrowser();
+    }
+
+    const projects = await scrapeNexo(browser, query);
+    const prices = projects.map((p) => p.priceFrom);
+    const data = {
+      district: query.district || null,
+      city: query.city || null,
+      count: projects.length,
+      minPrice: prices.length ? Math.min(...prices) : null,
+      maxPrice: prices.length ? Math.max(...prices) : null,
+      projects: query.all ? projects : projects.slice(0, 30),
+      fetchedAt: new Date().toISOString()
+    };
+
+    if (data.count >= 1) {
+      NEXO_CACHE.set(cacheKey, { data, fetchedAt: now });
+    }
+    return data;
+  })();
+
+  NEXO_IN_FLIGHT.set(cacheKey, run);
+  try {
+    return await run;
+  } finally {
+    NEXO_IN_FLIGHT.delete(cacheKey);
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Detalle de una publicación (imágenes + descripción)                 */
 /* ------------------------------------------------------------------ */
 async function getListingDetail(url) {
@@ -689,6 +849,8 @@ const CACHE_TTL = 10 * 60 * 1000;
 const IN_FLIGHT = new Map();
 const RENT_CACHE = new Map();
 const RENT_IN_FLIGHT = new Map();
+const NEXO_CACHE = new Map();
+const NEXO_IN_FLIGHT = new Map();
 
 // dataset de distritos de Lima para saber cuándo usar URLs con --lima--lima
 const DATA_DISTRICTS_SET = new Set([
@@ -702,4 +864,4 @@ const DATA_DISTRICTS_SET = new Set([
   "Cieneguilla","Chaclacayo","Lurigancho-Chosica"
 ]);
 
-module.exports = { getComparables, getListingDetail, getRentals, buildUrls, buildRentUrls, parseCardText, parseRentCardText, scrapeRemax, parseRemaxCard };
+module.exports = { getComparables, getListingDetail, getRentals, getNexoProjects, buildUrls, buildRentUrls, buildNexoUrl, parseCardText, parseRentCardText, parseNexoItem, scrapeRemax, parseRemaxCard, scrapeNexo };

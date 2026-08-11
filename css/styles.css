@@ -59,6 +59,18 @@ body {
   font-size: 11px; padding: 4px 10px; border-radius: 20px;
   background: rgba(255, 255, 255, 0.14);
 }
+.badge-link {
+  font-size: 11px; font-weight: 700; color: #fff; text-decoration: none;
+  padding: 4px 11px; border-radius: 20px; background: #7c4dff;
+  transition: background 0.15s; white-space: nowrap;
+}
+.badge-link:hover { background: #6a39f0; }
+html { scroll-behavior: smooth; }
+.nexo.flash { animation: nexoFlash 1.8s ease; }
+@keyframes nexoFlash {
+  0%, 60% { box-shadow: 0 0 0 3px #7c4dff; }
+  100% { box-shadow: 0 2px 12px rgba(90, 60, 180, 0.08); }
+}
 
 /* ---------- Layout ---------- */
 .layout {
@@ -295,6 +307,90 @@ input[type="number"]:focus, select:focus { border-color: var(--accent); }
   transition: background 0.15s; white-space: nowrap;
 }
 .market-list .m-tasar:hover { background: #33659f; }
+
+.see-more {
+  display: block; width: 100%; margin-top: 8px;
+  font-size: 11.5px; font-weight: 700; color: var(--ink-soft);
+  background: #fff; border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 10px; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+}
+.see-more:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- Página de proyectos nuevos (Nexo) ---------- */
+.brand-link { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+.projects-layout { max-width: 1200px; margin: 0 auto; padding: 22px 28px 40px; }
+.projects-status {
+  margin-top: 16px; font-size: 12.5px; color: var(--ink-soft);
+  background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px;
+}
+.projects-status.error { color: #c0392b; }
+.projects-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 16px; margin-top: 18px;
+}
+.project-card {
+  display: flex; flex-direction: column; overflow: hidden;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05); transition: box-shadow 0.15s, transform 0.15s;
+}
+.project-card:hover { box-shadow: 0 6px 18px rgba(90, 60, 180, 0.12); transform: translateY(-2px); }
+.pc-media { position: relative; aspect-ratio: 16 / 10; background: #eef2f8; }
+.pc-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pc-phase {
+  position: absolute; top: 8px; left: 8px; max-width: 70%;
+  font-size: 10.5px; font-weight: 700; color: #fff; background: #7c4dff;
+  padding: 2px 8px; border-radius: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pc-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 5px; flex: 1; }
+.pc-name { font-weight: 800; font-size: 13.5px; color: var(--ink); line-height: 1.25; }
+.pc-price { font-size: 15px; font-weight: 800; color: #5a3cb4; font-variant-numeric: tabular-nums; }
+.pc-meta { font-size: 11.5px; color: var(--ink-soft); }
+.pc-builder { font-size: 11px; color: var(--ink-soft); }
+.pc-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 8px; }
+.pc-btn {
+  flex: 1; text-align: center; font-size: 11.5px; font-weight: 700;
+  padding: 7px 0; border-radius: 7px; text-decoration: none; cursor: pointer;
+  border: 1px solid transparent; transition: background 0.15s;
+}
+.pc-open { background: #7c4dff; color: #fff; }
+.pc-open:hover { background: #6a39f0; }
+.pc-photos { background: #f0edf9; color: #5a3cb4; border-color: #e3dcf7; }
+.pc-photos:hover { background: #e6dffb; }
+
+/* ---------- Proyectos nuevos (módulo aparte, Nexo Inmobiliario) ---------- */
+.nexo {
+  margin-top: 18px; background: #fff;
+  border: 2px solid #d9ccf8; border-radius: 10px; padding: 12px 14px;
+  box-shadow: 0 2px 12px rgba(90, 60, 180, 0.08);
+}
+.nexo-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.nexo-head h3 { margin: 0; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.6px; color: #5a3cb4; }
+.nexo-badge {
+  font-size: 11px; font-weight: 700; color: #fff; background: #7c4dff;
+  padding: 2px 9px; border-radius: 20px;
+}
+.nexo-badge.loading { background: var(--accent); }
+.nexo-badge.empty { background: #c3ccda; }
+.nexo-sub { margin: 2px 0 8px; font-size: 11.5px; color: var(--ink-soft); }
+.nexo-list { list-style: none; margin: 0; padding: 0; }
+.nexo-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 6px; margin: 0 -6px; border-radius: 8px;
+  border-top: 1px dashed var(--line); font-size: 12.5px;
+}
+.nexo-list li:first-child { border-top: none; }
+.nexo-list li:hover { background: #f6f2ff; }
+.nexo-thumb { width: 58px; height: 46px; object-fit: cover; border-radius: 7px; flex: none; background: #eef2f8; }
+.nexo-info { flex: 1; min-width: 0; }
+.nexo-info .n-name { font-weight: 700; color: var(--ink); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nexo-info .n-meta { font-size: 11px; color: var(--ink-soft); display: block; }
+.nexo-price { font-weight: 700; color: #5a3cb4; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nexo-phase { font-size: 10px; color: #5a3cb4; background: #ece4ff; padding: 1px 6px; border-radius: 10px; white-space: nowrap; }
+.nexo-btn {
+  font-size: 10.5px; font-weight: 700; color: #fff; background: #7c4dff;
+  border: none; border-radius: 6px; padding: 5px 10px; cursor: pointer;
+  transition: background 0.15s; white-space: nowrap;
+}
+.nexo-btn:hover { background: #6a39f0; }
 
 /* ---------- Modal de publicación y tasación ---------- */
 body.no-scroll { overflow: hidden; }

@@ -18,8 +18,9 @@ const url = require("url");
 let getComparables = null;
 let getListingDetail = null;
 let getRentals = null;
+let getNexoProjects = null;
 try {
-  ({ getComparables, getListingDetail, getRentals } = require("./scraper"));
+  ({ getComparables, getListingDetail, getRentals, getNexoProjects } = require("./scraper"));
 } catch (e) {
   console.log("  [aviso] Playwright no está instalado; los precios de mercado quedarán desactivados. Ejecuta: npm install");
 }
@@ -144,9 +145,41 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (parsed.pathname === "/api/nexo") {
+    const q = parsed.query;
+    const query = {
+      district: q.district || null,
+      city: q.city || null,
+      all: q.all === "1" || q.all === "true"
+    };
+    if (!query.district && !query.city) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Falta district o city" }));
+      return;
+    }
+    if (!getNexoProjects) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Módulo de proyectos Nexo no disponible (npm install pendiente)", count: 0 }));
+      return;
+    }
+    getNexoProjects(query)
+      .then((data) => {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store"
+        });
+        res.end(JSON.stringify(data));
+      })
+      .catch((e) => {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Error al obtener proyectos Nexo", detail: e.message, count: 0 }));
+      });
+    return;
+  }
+
   if (parsed.pathname === "/api/listing-detail") {
     const u = (parsed.query.url || "").trim();
-    if (!getListingDetail || !/^https:\/\/(www\.)?(adondevivir|urbania|remax)\./i.test(u)) {
+    if (!getListingDetail || !/^https:\/\/(www\.)?(adondevivir|urbania|remax|nexoinmobiliario)\./i.test(u)) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "URL no válida", images: [], title: "", description: "" }));
       return;
