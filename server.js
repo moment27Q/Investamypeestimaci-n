@@ -17,8 +17,9 @@ const url = require("url");
 
 let getComparables = null;
 let getListingDetail = null;
+let getRentals = null;
 try {
-  ({ getComparables, getListingDetail } = require("./scraper"));
+  ({ getComparables, getListingDetail, getRentals } = require("./scraper"));
 } catch (e) {
   console.log("  [aviso] Playwright no está instalado; los precios de mercado quedarán desactivados. Ejecuta: npm install");
 }
@@ -107,6 +108,38 @@ const server = http.createServer((req, res) => {
       .catch((e) => {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Error al obtener comparables", detail: e.message }));
+      });
+    return;
+  }
+
+  if (parsed.pathname === "/api/rentals") {
+    const q = parsed.query;
+    const query = {
+      district: q.district || null,
+      city: q.city || null,
+      type: q.type || "departamento"
+    };
+    if (!query.district && !query.city) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Falta district o city" }));
+      return;
+    }
+    if (!getRentals) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Módulo de precios de alquiler no disponible (npm install pendiente)", count: 0 }));
+      return;
+    }
+    getRentals(query)
+      .then((data) => {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store"
+        });
+        res.end(JSON.stringify(data));
+      })
+      .catch((e) => {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Error al obtener alquileres", detail: e.message }));
       });
     return;
   }

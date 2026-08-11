@@ -16,6 +16,7 @@ Valor = **precio por m² base** × **área** × ajustes hedónicos
 3. **Ajustes (en tiempo real)**: tamaño (los m² pequeños valen más por m²), tipo de inmueble, antigüedad, estado de conservación, piso, zona interna del distrito y obra nueva/usada.
 4. **Smart defaults**: si no tocas el área, se auto-rellena con la **mediana del área de los avisos reales** de la zona.
 5. Resultado con **rango de confianza (±8%)**, precio en S/ y USD, **panel de avisos de mercado** con la lista de comparables reales, y desglose transparente de cada factor.
+6. **Alquiler mensual estimado**: además del valor de venta, la app muestra el **alquiler mensual estimado** (S/ y USD) calculado con la **mediana real de rentas de Urbania y Adondevivir** (S//m²/mes) del distrito, combinada con una base estática de rendimiento, y aplicando los ajustes hedónicos suavizados. Incluye su propio panel de avisos de alquiler con la mediana y el rango por m².
 
 ## Requisitos
 
@@ -57,7 +58,9 @@ server.js           Servidor estático + endpoint /api/comparables
 
 `GET /api/comparables?district=Miraflores&type=departamento` → `{ count, medianPerM2, medianArea, minPerM2, maxPerM2, sources, listings: [...] }`
 
-- Caché en memoria de 10 minutos por distrito+tipo para no saturar los portales.
+`GET /api/rentals?district=Miraflores&type=departamento` → `{ count, medianRent, medianRentPerM2, medianArea, minRent, maxRent, minRentPerM2, maxRentPerM2, sources, listings: [...] }`
+
+- Caché en memoria de 10 minutos por distrito+tipo para no saturar los portales (venta y alquiler tienen cachés separadas).
 - Resultados que no se pueden scrapear devuelven `count: 0` y la app cae a la base estática.
 
 ## Notas legales y técnicas

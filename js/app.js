@@ -24,6 +24,14 @@
     marketBadge: $("marketBadge"),
     marketSub: $("marketSub"),
     marketList: $("marketList"),
+    rentalPanel: $("rentalPanel"),
+    rentalBadge: $("rentalBadge"),
+    rentalPrice: $("rentalPrice"),
+    rentalUSD: $("rentalUSD"),
+    rentalRange: $("rentalRange"),
+    rentalPerM2: $("rentalPerM2"),
+    rentalSub: $("rentalSub"),
+    rentalList: $("rentalList"),
     listingModal: $("listingModal"),
     lmSource: $("lmSource"),
     lmBody: $("lmBody"),
@@ -84,6 +92,9 @@
     market: null,
     marketFetching: false,
     marketSeq: 0,
+    rentMarket: null,
+    rentFetching: false,
+    rentSeq: 0,
     envProfile: null,
     areaTouched: false,
     zoneTouched: false
@@ -201,6 +212,7 @@
     els.mapStatus.classList.remove("hidden");
     recompute();
     fetchMarket();
+    fetchRentals();
     fetchEnvironment();
   }
 
@@ -218,6 +230,7 @@
       els.mapStatus.classList.remove("hidden");
       recompute();
       fetchMarket();
+      fetchRentals();
       fetchEnvironment();
     } catch (e) {
       showStatus("No se pudo geocodificar ese punto.");
@@ -259,6 +272,7 @@
       renderFields();
       recompute();
       fetchMarket();
+      fetchRentals();
       fetchEnvironment();
     });
   });
@@ -419,6 +433,18 @@
       tr.appendChild(td2);
       els.breakdownBody.appendChild(tr);
     });
+
+    // Alquiler mensual estimado
+    const rent = computeRent(state.location, inputs, state.rentMarket, state.envProfile);
+    els.rentalPanel.classList.remove("hidden");
+    els.rentalPrice.textContent = "S/ " + fmt(rent.monthly);
+    els.rentalUSD.textContent = "≈ USD " + fmtUSD(rent.monthlyUSD);
+    els.rentalRange.textContent = "Rango probable: S/ " + fmt(rent.rangeLow) + " — S/ " + fmt(rent.rangeHigh);
+    els.rentalPerM2.textContent = "≈ S/ " + fmt(rent.effectiveRentPerM2) + "/m²/mes";
+    if (!rent.hasMarket && !state.rentFetching && !els.rentalBadge.classList.contains("loading")) {
+      els.rentalBadge.textContent = "Base estática";
+      els.rentalBadge.className = "rental-badge empty";
+    }
   }
 
   /* ---------------- Precios de mercado (comparables reales) ---------------- */
@@ -525,6 +551,199 @@
       li.appendChild(btn);
       els.marketList.appendChild(li);
     });
+  }
+
+  /* ---------------- Alquiler mensual (mercado Urbania/Adondevivir) ---------------- */
+  async function fetchRentals() {
+    const loc = state.location;
+    if (!loc || (!loc.district && !loc.city)) return;
+    const type = readInputs().type;
+
+    const seq = ++state.rentSeq;
+    state.rentFetching = true;
+    state.rentMarket = null;
+    els.rentalPanel.classList.remove("hidden");
+    els.rentalBadge.textContent = "Buscando…";
+    els.rentalBadge.className = "rental-badge loading";
+    els.rentalSub.textContent = "Revisando avisos de alquiler de Urbania y Adondevivir en " +
+      (loc.district || loc.city) + "… esto puede tardar 20–60 s.";
+
+    try {
+      const params = new URLSearchParams({
+        district: loc.district || "",
+        city: loc.city || "",
+        type: type
+      });
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 95000);
+      let res;
+      try {
+        res = await fetch("/api/rentals?" + params.toString(), { signal: ctrl.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (seq !== state.rentSeq || !state.location) return;
+
+      state.rentMarket = data;
+      renderRentals(data, type);
+      recompute();
+    } catch (e) {
+      if (seq !== state.rentSeq) return;
+      state.rentMarket = null;
+      els.rentalBadge.textContent = "Sin datos";
+      els.rentalBadge.className = "rental-badge empty";
+      els.rentalSub.textContent = "No se pudieron obtener avisos de alquiler; el estimado usa la base estática.";
+      els.rentalList.innerHTML = "";
+      recompute();
+    } finally {
+      if (seq === state.rentSeq) state.rentFetching = false;
+    }
+  }
+
+  function renderRentals(data, type) {
+    if (data.count >= 3) {
+      els.rentalBadge.textContent = data.count + " avisos";
+      els.rentalBadge.className = "rental-badge";
+    } else if (data.count > 0) {
+      els.rentalBadge.textContent = "Solo " + data.count + " avisos";
+      els.rentalBadge.className = "rental-badge empty";
+    } else {
+      els.rentalBadge.textContent = "0 avisos";
+      els.rentalBadge.className = "rental-badge empty";
+    }
+
+    const srcs = data.sources.length ? data.sources.join(" y ") : "—";
+    els.rentalSub.textContent = data.count
+      ? "Mediana de alquiler: S/ " + fmt(data.medianRent) + "/mes (≈ S/ " +
+        fmt(data.medianRentPerM2) + "/m²/mes, de S/ " + fmt(data.minRentPerM2) +
+        " a S/ " + fmt(data.maxRentPerM2) + "/m²). Fuentes: " + srcs + "."
+      : "No se encontraron avisos de alquiler de " + type + "s en la zona. Se usa la base estática.";
+
+    els.rentalList.innerHTML = "";
+    data.listings.forEach((l) => {
+      const li = document.createElement("li");
+      li.className = "market-item";
+      const meta = [];
+      if (l.area) meta.push(l.area + " m²");
+      if (l.bedrooms != null) meta.push(l.bedrooms + " dorm.");
+      if (l.bathrooms != null) meta.push(l.bathrooms + " baños");
+      if (l.title) meta.push(l.title);
+      const p = document.createElement("div");
+      p.className = "m-price";
+      p.innerHTML = "S/ " + fmt(l.rent) + " <small>" + meta.join(" · ") + "</small>";
+      const m = document.createElement("div");
+      m.className = "m-m2";
+      m.textContent = "S/ " + fmt(l.rentPerM2) + "/m²";
+      const tag = document.createElement("span");
+      tag.className = "m-tag";
+      tag.textContent = l.source;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "m-tasar";
+      btn.textContent = "Estimar";
+      btn.addEventListener("click", () => openListingRent(l));
+      li.appendChild(p);
+      li.appendChild(m);
+      li.appendChild(tag);
+      li.appendChild(btn);
+      els.rentalList.appendChild(li);
+    });
+  }
+
+  /* ---------------- Modal de publicación de alquiler ---------------- */
+  function openListingRent(l) {
+    els.listingModal.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
+    els.lmSource.textContent = l.source + " · publicación de alquiler";
+    renderRentModal(l, null);
+    if (!state.location) return;
+    const current = readInputs();
+    const inputs = {
+      ...current,
+      area: l.area || current.area,
+      bedrooms: l.bedrooms != null ? l.bedrooms : current.bedrooms,
+      bathrooms: l.bathrooms != null ? l.bathrooms : current.bathrooms
+    };
+    const r = computeRent(state.location, inputs, state.rentMarket, state.envProfile);
+    renderRentModal(l, r);
+
+    if (l.url) {
+      fetch("/api/listing-detail?url=" + encodeURIComponent(l.url))
+        .then((res) => res.json())
+        .then((d) => {
+          if (els.listingModal.classList.contains("hidden")) return;
+          renderRentModal(l, r, d);
+        })
+        .catch(() => {});
+    }
+  }
+
+  function renderRentModal(l, r, detail) {
+    const meta = [];
+    if (l.area) meta.push(l.area + " m²");
+    if (l.bedrooms != null) meta.push(l.bedrooms + " dorm.");
+    if (l.bathrooms != null) meta.push(l.bathrooms + " baños");
+    if (l.title) meta.push(l.title);
+
+    const images = detail ? detail.images : l.image ? [l.image] : [];
+    const gal = images.length
+      ? '<div class="lm-gallery"><img class="lm-main" src="' + esc(images[0]) +
+        '" alt="Publicación" onerror="this.closest(\'.lm-gallery\').style.display=\'none\'">' +
+        (images.length > 1
+          ? '<div class="lm-thumbs">' + images.slice(1, 6).map((s) =>
+              '<img src="' + esc(s) + '" alt="Foto" loading="lazy" onerror="this.style.display=\'none\'">'
+            ).join("") + "</div>"
+          : "") +
+        "</div>"
+      : '<div class="lm-gallery lm-placeholder">Sin imágenes disponibles</div>';
+
+    const priceBlock = r
+      ? '<div class="lm-prices">' +
+          '<div class="lm-ask"><span class="lm-k">Renta pedida (portal)</span>' +
+          '<span class="lm-ask-v">S/ ' + fmt(l.rent) + '</span>' +
+          '<span class="lm-ask-m2">S/ ' + fmt(l.rentPerM2) + '/m²/mes</span></div>' +
+          '<div class="lm-est"><span class="lm-k">Alquiler estimado (IA)</span>' +
+          '<span class="lm-est-v">S/ ' + fmt(r.monthly) + '</span>' +
+          '<span class="lm-est-m2">≈ USD ' + fmtUSD(r.monthlyUSD) + ' · rango S/ ' +
+          fmt(r.rangeLow) + ' – S/ ' + fmt(r.rangeHigh) + '</span></div>' +
+        "</div>" +
+        rentDeltaHtml(l, r)
+      : '<div class="lm-prices"><div class="lm-ask"><span class="lm-k">Renta pedida (portal)</span>' +
+        '<span class="lm-ask-v">S/ ' + fmt(l.rent) + '</span></div></div>';
+
+    const detailHtml =
+      detail && detail.description
+        ? '<p class="lm-desc">' + esc(detail.description) + "</p>"
+        : "";
+
+    const openBtn = l.url
+      ? '<a class="lm-open" href="' + esc(l.url) + '" target="_blank" rel="noopener">Ver publicación original ↗</a>'
+      : "";
+
+    els.lmBody.innerHTML =
+      '<div class="lm-grid">' +
+        '<div class="lm-media">' + gal + openBtn + "</div>" +
+        '<div class="lm-info">' +
+          '<h4>' + esc(meta.join(" · ")) + "</h4>" +
+          priceBlock +
+          detailHtml +
+        "</div>" +
+      "</div>";
+  }
+
+  function rentDeltaHtml(l, r) {
+    const diffPct = (l.rent / r.monthly - 1) * 100;
+    if (diffPct > 5) {
+      return '<p class="lm-delta warn">La renta pedida está ' + Math.round(diffPct) +
+        "% por encima del alquiler estimado.</p>";
+    }
+    if (diffPct < -5) {
+      return '<p class="lm-delta good">La renta pedida está ' + Math.abs(Math.round(diffPct)) +
+        "% por debajo del alquiler estimado. Posible oportunidad.</p>";
+    }
+    return '<p class="lm-delta">La renta pedida está alineada con el alquiler estimado.</p>';
   }
 
   /* ---------------- Modal de publicación y tasación ---------------- */

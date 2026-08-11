@@ -448,3 +448,66 @@ function computeValuation(location, inputs, market, envProfile) {
     market: market
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Alquiler mensual estimado (mercaod de Urbania/Adondevivir)          */
+/* ------------------------------------------------------------------ */
+
+function rentBaseFromPrice(pricePerM2) {
+  // Rendimiento bruto mensual por m²: crece con el precio, porque en zonas
+  // caras las rentas por m² no escalan 1:1 con el precio de venta.
+  const yieldM = clamp(0.0038 + (pricePerM2 - 2500) * 0.00000035, 0.0038, 0.007);
+  return pricePerM2 * yieldM;
+}
+
+function blendRentMarket(staticRentM2, rentMarket) {
+  const median = rentMarket.medianRentPerM2;
+  if (median < staticRentM2 * 0.4 || median > staticRentM2 * 2.5) return staticRentM2;
+  return 0.7 * median + 0.3 * staticRentM2;
+}
+
+function computeRent(location, inputs, rentMarket, envProfile) {
+  const base = resolveBasePrice(location, null);
+  const staticRentM2 = rentBaseFromPrice(base.base);
+  const hasMarket = rentMarket && rentMarket.count >= 2 && rentMarket.medianRentPerM2;
+
+  let rentBaseM2 = staticRentM2;
+  if (hasMarket) rentBaseM2 = blendRentMarket(staticRentM2, rentMarket);
+  rentBaseM2 = clamp(rentBaseM2, base.base * 0.002, base.base * 0.012);
+
+  const envRaw = envProfile && envProfile.environmentFactor ? envProfile.environmentFactor : 1;
+  const envFactor = 1 + (envRaw - 1) * 0.5;
+  const refArea = hasMarket && rentMarket.medianArea ? rentMarket.medianArea : null;
+  const landRatio = landRatioFor(base.base);
+
+  const type = inputs.type || "departamento";
+  let calc;
+  if (type === "departamento") calc = calcDepartamento(inputs, envFactor, refArea);
+  else if (type === "casa") calc = calcCasa(inputs, envFactor, refArea);
+  else if (type === "terreno") calc = calcTerreno(inputs, envFactor, landRatio);
+  else calc = calcGeneric(inputs, envFactor, type, refArea);
+
+  // Los ajustes hedónicos pesan menos en alquiler que en venta (suavizados).
+  const rentFactor = 1 + (calc.factor - 1) * 0.7;
+  const effectiveRentPerM2 = rentBaseM2 * rentFactor;
+  const monthly = effectiveRentPerM2 * calc.area;
+  const rangeLow = monthly * 0.9;
+  const rangeHigh = monthly * 1.1;
+
+  return {
+    rentBasePerM2: rentBaseM2,
+    effectiveRentPerM2: effectiveRentPerM2,
+    monthly: monthly,
+    monthlyUSD: monthly / DATA.fx,
+    rangeLow: rangeLow,
+    rangeHigh: rangeHigh,
+    rangeLowUSD: rangeLow / DATA.fx,
+    rangeHighUSD: rangeHigh / DATA.fx,
+    area: calc.area,
+    confidence: hasMarket ? "alta" : "media",
+    hasMarket: hasMarket,
+    count: hasMarket ? rentMarket.count : 0,
+    zoneLabel: base.label,
+    market: rentMarket
+  };
+}

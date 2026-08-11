@@ -59,6 +59,26 @@ function buildUrls({ district, city, type }) {
   return urls;
 }
 
+function buildRentUrls({ district, city, type }) {
+  const plural = TYPE_SLUG[type] || "departamentos";
+  const urls = [];
+  const slug = slugify(district || city || "");
+
+  if (district && DATA_DISTRICTS_SET.has(district)) {
+    urls.push({
+      site: "urbania",
+      url: `https://urbania.pe/buscar/alquiler-de-${plural}-en-${slug}--lima--lima`
+    });
+  }
+  if (slug) {
+    urls.push({
+      site: "adondevivir",
+      url: `https://www.adondevivir.com/${plural}-en-alquiler-en-${slug}.html`
+    });
+  }
+  return urls;
+}
+
 function parseCardText(text) {
   if (!text || text.length > 1400) return null;
   if (/\bdesde\b/i.test(text) && /\bun\.?\b/i.test(text)) return null;
@@ -92,6 +112,78 @@ function parseCardText(text) {
     bedrooms: dormM ? parseInt(dormM[1], 10) : null,
     bathrooms: banoM ? parseInt(banoM[1], 10) : null,
     pricePerM2: Math.round(pM2),
+    title: text.split("|").slice(0, 2).join(" | ").trim().slice(0, 90)
+  };
+}
+
+function parseRentCardText(text) {
+  if (!text || text.length > 1400) return null;
+  // Avisos "Desde S/ X, un." de proyectos: no tienen precio único
+  if (/\bdesde\b/i.test(text) && /\bun\.?\b/i.test(text)) return null;
+
+  // Alquileres por día / noche / hora no son referencias mensuales
+  const head = text.slice(0, 90);
+  if (/\b(por\s+)?(d[ií]a|noche|hora|semana|mensualidad)\b/i.test(head)) return null;
+
+  // Precio mensual en S/ (primera ocurrencia que no sea "Mantenimiento")
+  const parts = text.split("|").map((s) => s.trim());
+  let price = null;
+  let pricePart = null;
+  for (const part of parts) {
+    const pm = part.match(/^S\/\s*([\d.,]+)/);
+    if (pm && !/Mantenimiento/i.test(part)) {
+      price = parseFloat(pm[1].replace(/\./g, "").replace(/,/g, ""));
+      pricePart = part;
+      break;
+    }
+  }
+
+  // Precio en USD (el aviso puede publicar solo en dólares). Los portales a veces
+  // concatenan el badge de descuento al número ("USD 1,0008%" = USD 1,000 + 8%).
+  let usd = null;
+  const usdM = text.match(/\b(?:US\$|USD)\s*([\d.,]+)/);
+  if (usdM) {
+    const raw = usdM[1];
+    let amount = raw;
+    if (raw.includes(",")) {
+      const groups = raw.split(",");
+      const last = groups[groups.length - 1];
+      if (last.length > 3) groups[groups.length - 1] = last.slice(0, 3);
+      amount = groups.join("");
+    } else {
+      amount = raw.replace(/,/g, "");
+    }
+    usd = parseFloat(amount);
+  }
+
+  // Si "US$" es mucho mayor que el valor en S/, no es un alquiler (es venta)
+  if (price != null && usd != null && usd > price * 2.5) return null;
+  if (/venta|se\s+vende|precio\s+de\s+venta/i.test(text.slice(0, 260))) return null;
+  if (price == null && usd != null) price = usd * USD_FX;
+  if (price == null) return null;
+
+  const areaM = text.match(/(\d+)\s*m[²2]\s*tot\.?/i) || text.match(/(\d+)\s*m[²2]/i);
+  if (!areaM) return null;
+  const area = parseInt(areaM[1], 10);
+
+  // Precio publicado "por m²" (S/ X /m²) -> convertir a renta mensual total
+  if (pricePart && /\/(\s*)?m[²2]|\bpor\s*m[²2]\b/i.test(pricePart) && area) {
+    price = price * area;
+  }
+
+  if (price < 200 || price > 250000) return null;
+  if (area < 12 || area > 3000) return null;
+  const pM2 = price / area;
+  if (pM2 < 3 || pM2 > 200) return null;
+
+  const dormM = text.match(/(\d+)\s*dorm\.?/i);
+  const banoM = text.match(/(\d+)\s*bañ?os?\.?/i);
+  return {
+    rent: Math.round(price),
+    area: area,
+    bedrooms: dormM ? parseInt(dormM[1], 10) : null,
+    bathrooms: banoM ? parseInt(banoM[1], 10) : null,
+    rentPerM2: Math.round(pM2),
     title: text.split("|").slice(0, 2).join(" | ").trim().slice(0, 90)
   };
 }
@@ -138,6 +230,63 @@ async function scrapePage(browser, url) {
       const card = parseCardText(c.t);
       if (!card) continue;
       const key = card.pricePerM2 + "|" + card.area;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      card.source = url.includes("urbania") ? "Urbania" : "Adondevivir";
+      if (c.href) card.url = c.href.startsWith("http") ? c.href : base + c.href;
+      if (c.src) card.image = c.src;
+      listings.push(card);
+      if (listings.length >= 30) break;
+    }
+    return listings;
+  } catch (e) {
+    return [];
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+async function scrapeRentPage(browser, url) {
+  const page = await browser.newPage({ userAgent: UA, locale: "es-PE", viewport: { width: 1280, height: 900 } });
+  try {
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 40000 });
+    await page.waitForTimeout(4000);
+
+    for (let i = 0; i < 7; i++) {
+      await page.mouse.wheel(0, 2500);
+      await page.waitForTimeout(700);
+    }
+
+    const cards = await page.evaluate(() => {
+      const out = [];
+      const els = document.querySelectorAll(
+        '[class*="postingCard-module__posting-container"], [class*="postingCard-module__posting-top"]'
+      );
+      for (const el of els) {
+        const t = (el.innerText || "").replace(/\n+/g, " | ").trim();
+        if (!t || !/(S\/\s*\d|US\$\s*\d)/.test(t)) continue;
+        const a = el.querySelector('a[href]');
+        const href = a ? a.getAttribute("href") : "";
+        let src = "";
+        let best = 0;
+        for (const img of el.querySelectorAll("img")) {
+          const s = img.currentSrc || img.src || img.getAttribute("data-src") || "";
+          if (!s || /(logo|icon|avatar|favicon)/i.test(s)) continue;
+          const w = img.naturalWidth || img.width || 0;
+          if (w >= best) { best = w; src = s; }
+        }
+        out.push({ t: t, href: href, src: src });
+      }
+      return out;
+    });
+
+    const base = url.includes("urbania") ? "https://urbania.pe" : "https://www.adondevivir.com";
+    const seen = new Set();
+    const listings = [];
+    for (const c of cards) {
+      const card = parseRentCardText(c.t);
+      if (!card) continue;
+      const key = card.rentPerM2 + "|" + card.area;
       if (seen.has(key)) continue;
       seen.add(key);
       card.source = url.includes("urbania") ? "Urbania" : "Adondevivir";
@@ -422,6 +571,76 @@ async function getComparables(query) {
   }
 }
 
+async function getRentals(query) {
+  const cacheKey = "rent::" + [query.district || "", query.city || "", query.type || "departamento"].join("::");
+  const now = Date.now();
+  if (RENT_CACHE.has(cacheKey) && now - RENT_CACHE.get(cacheKey).fetchedAt < CACHE_TTL) {
+    return RENT_CACHE.get(cacheKey).data;
+  }
+
+  if (RENT_IN_FLIGHT.has(cacheKey)) {
+    return RENT_IN_FLIGHT.get(cacheKey);
+  }
+
+  const run = (async () => {
+    const wait = Math.max(0, 2500 - (now - lastScrapeAt));
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastScrapeAt = Date.now();
+
+    let browser = await getBrowser();
+    if (!browser.isConnected()) {
+      browserPromise = null;
+      browser = await getBrowser();
+    }
+
+    const urls = buildRentUrls(query);
+    const results = await Promise.all(
+      urls.map((u) => scrapeRentPage(browser, u.url).then((list) => ({ site: u.site, list })))
+    );
+
+    const all = [];
+    for (const r of results) all.push(...r.list);
+
+    const uniq = [];
+    const seen = new Set();
+    for (const l of all) {
+      const key = l.rentPerM2 + "|" + l.area + "|" + (l.bedrooms || "");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      uniq.push(l);
+    }
+
+    const data = {
+      district: query.district || null,
+      city: query.city || null,
+      type: query.type || "departamento",
+      count: uniq.length,
+      medianRent: median(uniq.map((l) => l.rent)),
+      medianRentPerM2: median(uniq.map((l) => l.rentPerM2)),
+      medianArea: median(uniq.map((l) => l.area)),
+      minRent: uniq.length ? Math.min(...uniq.map((l) => l.rent)) : null,
+      maxRent: uniq.length ? Math.max(...uniq.map((l) => l.rent)) : null,
+      minRentPerM2: uniq.length ? Math.min(...uniq.map((l) => l.rentPerM2)) : null,
+      maxRentPerM2: uniq.length ? Math.max(...uniq.map((l) => l.rentPerM2)) : null,
+      sources: results.filter((r) => r.list.length).map((r) => r.site),
+      listings: uniq.slice(0, 18),
+      fetchedAt: new Date().toISOString()
+    };
+
+    if (data.count >= 2) {
+      RENT_CACHE.set(cacheKey, { data, fetchedAt: now });
+    }
+    return data;
+  })();
+
+  RENT_IN_FLIGHT.set(cacheKey, run);
+  try {
+    return await run;
+  } finally {
+    RENT_IN_FLIGHT.delete(cacheKey);
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Detalle de una publicación (imágenes + descripción)                 */
 /* ------------------------------------------------------------------ */
@@ -468,6 +687,8 @@ async function getListingDetail(url) {
 const CACHE = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 const IN_FLIGHT = new Map();
+const RENT_CACHE = new Map();
+const RENT_IN_FLIGHT = new Map();
 
 // dataset de distritos de Lima para saber cuándo usar URLs con --lima--lima
 const DATA_DISTRICTS_SET = new Set([
@@ -481,4 +702,4 @@ const DATA_DISTRICTS_SET = new Set([
   "Cieneguilla","Chaclacayo","Lurigancho-Chosica"
 ]);
 
-module.exports = { getComparables, getListingDetail, buildUrls, parseCardText, scrapeRemax, parseRemaxCard };
+module.exports = { getComparables, getListingDetail, getRentals, buildUrls, buildRentUrls, parseCardText, parseRentCardText, scrapeRemax, parseRemaxCard };
