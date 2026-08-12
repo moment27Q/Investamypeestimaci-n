@@ -43,8 +43,16 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
+  const allowedOrigins = new Set([
+    "https://investamype.com",
+    "https://www.investamype.com"
+  ]);
+  const requestOrigin = req.headers.origin;
+  const corsOrigin = allowedOrigins.has(requestOrigin)
+    ? requestOrigin
+    : "https://investamype.com";
   const corsHeaders = {
-    "Access-Control-Allow-Origin": "https://investamype.com",
+    "Access-Control-Allow-Origin": corsOrigin,
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization"
   };
