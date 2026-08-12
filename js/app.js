@@ -91,7 +91,9 @@
     envAmenities: $("envAmenities"),
     envServices: $("envServices"),
     envFactorVal: $("envFactorVal"),
-    envWhy: $("envWhy")
+    envWhy: $("envWhy"),
+    legalPanel: $("legalPanel"),
+    legalBtn: $("legalBtn")
   };
 
   const state = {
@@ -370,6 +372,30 @@
 
   els.nexoAll.addEventListener("click", goNexoPage);
 
+  /* ---------------- Informe de tasación legal ---------------- */
+  function openLegalReport() {
+    const loc = state.location;
+    if (!loc) return;
+    const snapshot = {
+      version: 1,
+      location: loc,
+      inputs: readInputs(),
+      market: state.market,
+      rentMarket: state.rentMarket,
+      envProfile: state.envProfile,
+      generatedAt: new Date().toISOString()
+    };
+    try {
+      sessionStorage.setItem("informeSnapshot", JSON.stringify(snapshot));
+    } catch (e) {
+      showStatus("No se pudo abrir el informe de tasación.");
+      return;
+    }
+    window.location.href = "informe.html";
+  }
+
+  els.legalBtn.addEventListener("click", openLegalReport);
+
   function readInputs() {
     const active = document.querySelector(".type-btn.active");
     const type = active ? active.dataset.type : "departamento";
@@ -418,6 +444,7 @@
     const empty = document.querySelector(".empty-state");
     priceBlock.classList.remove("hidden");
     empty.classList.add("hidden");
+    els.legalPanel.classList.remove("hidden");
 
     animatePrice(r.total);
 

@@ -487,6 +487,112 @@ body.no-scroll { overflow: hidden; }
 
 .hidden { display: none !important; }
 
+/* ---------- Apartado "Tasación legal" (panel de resultados) ---------- */
+.legal { margin-top: 18px; background: #fbf8ef; border: 1px solid #e7d9a8; border-radius: 10px; padding: 12px 14px; }
+.legal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.legal-head h3 { margin: 0; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.6px; color: #7a5c12; }
+.legal-badge { font-size: 10.5px; font-weight: 700; color: #7a5c12; background: #f1e6bf; padding: 2px 9px; border-radius: 12px; }
+.legal-sub { margin: 2px 0 10px; font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; }
+.legal-btn {
+  width: 100%; padding: 11px 14px; border: none; border-radius: 9px;
+  background: linear-gradient(135deg, #b8912a, #c9a227); color: #16213e;
+  font-size: 13.5px; font-weight: 700; cursor: pointer; transition: filter 0.15s;
+}
+.legal-btn:hover { filter: brightness(1.06); }
+
+/* ---------- Página del informe ---------- */
+body.informe-page { background: #e8ebf1; }
+.informe-bar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 20px; background: #16213e; color: #fff;
+}
+.informe-bar-title { flex: 1; font-size: 13px; font-weight: 700; letter-spacing: 0.3px; }
+.ib-btn {
+  padding: 9px 16px; border: 1px solid rgba(255,255,255,0.25); border-radius: 8px;
+  background: transparent; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.ib-btn:hover { background: rgba(255,255,255,0.12); }
+.ib-btn.primary { background: #c9a227; border-color: #c9a227; color: #16213e; }
+.ib-btn.primary:hover { background: #d8b43a; }
+.informe-error { max-width: 720px; margin: 60px auto; background: #fff; border-radius: 14px; box-shadow: var(--shadow); padding: 30px; }
+.informe-meta-print { max-width: 820px; margin: 14px auto 0; font-size: 11px; color: var(--ink-soft); text-align: center; }
+
+.informe-sheet {
+  max-width: 820px; margin: 18px auto 60px; background: #fff;
+  box-shadow: 0 10px 40px rgba(22, 33, 62, 0.14); border-radius: 4px;
+  padding: 54px 62px;
+  font-family: Georgia, "Times New Roman", Times, serif;
+  color: #111;
+  font-size: 13px; line-height: 1.55;
+}
+#report h1 {
+  margin: 26px 0 4px; font-size: 26px; letter-spacing: 1.5px; text-align: center;
+  text-transform: uppercase; color: #111;
+}
+#report h2 {
+  margin: 26px 0 10px; font-size: 16.5px; border-bottom: 1.5px solid #111; padding-bottom: 4px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+#report h3 { margin: 16px 0 6px; font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.3px; }
+#report p { margin: 8px 0; }
+#report p.c { text-align: center; }
+#report p.sub { font-size: 12.5px; color: #555; }
+#report p.small { font-size: 11px; color: #555; }
+#report ul { margin: 6px 0 10px; padding-left: 20px; }
+#report li { margin: 3px 0; }
+
+#report table.t { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 12.5px; }
+#report table.t th, #report table.t td {
+  border: 1px solid #999; padding: 6px 8px; text-align: left; vertical-align: top;
+}
+#report table.t th { background: #eef1f6; font-weight: 700; width: 38%; }
+#report table.t td .n { color: #666; font-size: 11.5px; }
+#report table.t tr.tot th, #report table.t tr.tot td { background: #f5ecd2; font-weight: 700; }
+
+.portada { text-align: center; padding: 30px 0 6px; }
+.portada h1 { margin-top: 40px; }
+.portada table.t { margin-top: 22px; text-align: left; }
+.portada table.t th { width: 42%; }
+
+.fill {
+  display: inline-block; min-width: 120px; padding: 0 4px 1px;
+  border-bottom: 1px solid #777; outline: none; cursor: text;
+}
+.fill:empty::before { content: attr(data-ph); color: #9aa4b2; }
+.fill:focus { background: #f7f7d8; border-bottom-color: #000; }
+
+.pagebreak { break-after: page; }
+
+.firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 60px; }
+.firma p { margin: 4px 0; font-size: 12.5px; }
+.firma .linea { margin-top: 26px; font-weight: 700; }
+.firma .firma-firma { margin-top: 44px; letter-spacing: 2px; color: #444; }
+.croquis {
+  border: 1px dashed #999; min-height: 150px; margin: 6px 0 14px; padding: 20px;
+  display: grid; place-items: center; color: #777; text-align: center; font-size: 12px;
+}
+
+/* ---------- Impresión (A4) ---------- */
+@page {
+  size: A4;
+  margin: 18mm 16mm 20mm;
+  @bottom-center { content: "TASADOR PERÚ · Informe de Tasación · Página " counter(page) " de " counter(pages); font-size: 9px; color: #666; font-family: Georgia, serif; }
+}
+@media print {
+  body.informe-page { background: #fff; }
+  .informe-bar, .informe-meta-print { display: none !important; }
+  .informe-sheet {
+    max-width: none; margin: 0; padding: 0; box-shadow: none; border-radius: 0;
+    font-size: 11.5px;
+  }
+  #report h1 { font-size: 22px; margin-top: 0; }
+  #report h2 { font-size: 14px; }
+  .fill { border-bottom-color: #444; }
+  .fill:empty::before { content: ""; }
+  .firmas { margin-top: 40px; }
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 960px) {
   .layout { grid-template-columns: 1fr; padding: 16px; }
@@ -499,4 +605,6 @@ body.no-scroll { overflow: hidden; }
   .type-grid { grid-template-columns: repeat(2, 1fr); }
   .topbar { flex-direction: column; align-items: flex-start; gap: 8px; }
   #addressInput { padding-right: 56px; }
+  .informe-sheet { padding: 28px 22px; }
+  .firmas { grid-template-columns: 1fr; }
 }
