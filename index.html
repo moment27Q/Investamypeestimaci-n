@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tasador Peru — Tasación de propiedades en tiempo real</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -20,450 +19,148 @@
     <div class="topbar-meta">
       <span class="badge-live"><i></i> EN VIVO</span>
       <span class="badge-data">Datos: Urbania · ASEI · BCRP</span>
+      <a class="badge-link" href="tasador.html">Tasador ↗</a>
+      <a class="badge-link" href="maximiza.html" id="maxLink">Maximiza tu propiedad ↗</a>
       <a class="badge-link" href="proyectos.html" id="nexoLink">Proyectos nuevos ↗</a>
     </div>
   </header>
 
-  <main class="layout">
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <span class="hero-tag"><i></i> Tasación inmobiliaria en línea</span>
+        <h1>¿Cuánto vale <span class="hl">realmente</span> tu propiedad?</h1>
+        <p class="hero-sub">
+          Estimamos el valor de mercado de un inmueble al instante, cruzándolo con precios reales
+          de avisos en vivo, el entorno de la zona y el análisis automático de sus características.
+        </p>
 
-    <!-- Columna izquierda -->
-    <section class="col-main">
+        <div class="hero-ctas">
+          <a class="hero-cta" href="tasador.html">Tasar mi propiedad →</a>
+          <a class="hero-cta ghost" href="#que-hacemos">Cómo funciona</a>
+        </div>
+        <p class="hero-note">Gratuito · referencial · sin registro</p>
+      </div>
 
-      <!-- Paso 1: Ubicación -->
-      <div class="card">
-        <div class="card-head">
-          <span class="step">1</span>
-          <div>
-            <h2>Ubicación de la propiedad</h2>
-            <p>Pega la dirección de Google Maps o selecciona el punto en el mapa.</p>
+      <div class="hero-preview">
+        <div class="prev-card">
+          <div class="prev-top">
+            <span class="prev-ic">◧</span>
+            <div class="prev-tit">
+              <b>Tasación en vivo</b>
+              <span>Departamento · 80 m²</span>
+            </div>
+            <span class="prev-live"><i></i>EN VIVO</span>
           </div>
-        </div>
-
-        <div class="search-row">
-          <div class="autocomplete">
-            <svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
-            <input type="text" id="addressInput" placeholder="Ej: Av. Larco 123, Miraflores, Lima" autocomplete="off">
-            <button type="button" id="geoBtn" title="Usar mi ubicación actual">
-              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm0-5.5a2.5 2.5 0 1 1 2.5-2.5 2.5 2.5 0 0 1-2.5 2.5z"/></svg>
-            </button>
-            <div id="suggestions" class="suggestions hidden"></div>
+          <div class="prev-price">S/ 540,000</div>
+          <div class="prev-usd">≈ USD 142,000</div>
+          <div class="prev-list">
+            <div><span>Rango estimado</span><b>S/ 512k – 568k</b></div>
+            <div><span>Alquiler mensual</span><b>S/ 2,400</b></div>
+            <div><span>Comparables</span><b>24 avisos</b></div>
+            <div><span>Confianza</span><b class="ok">Alta</b></div>
           </div>
+          <div class="prev-foot">Miraflores · Lima — actualizado hace 12 s</div>
         </div>
+      </div>
+    </div>
 
-        <div class="map-wrap">
-          <div id="map"></div>
-          <div id="mapStatus" class="map-status hidden"></div>
+    <div class="hero-stats">
+      <div><b>+70</b><span>distritos y ciudades</span></div>
+      <div><b>~30 s</b><span>de respuesta</span></div>
+      <div><b>3 fuentes</b><span>Urbania · ASEI · BCRP</span></div>
+    </div>
+  </section>
+
+  <section class="about" id="que-hacemos">
+    <div class="about-inner">
+      <span class="about-tag">Nuestra propuesta</span>
+      <h2>Conoce el valor real de un inmueble<br>antes de comprar, vender o invertir</h2>
+      <p class="about-lead">
+        El precio no lo decide una sola web ni un promedio nacional. Se define en la calle:
+        los avisos publicados hoy, la zona exacta, el estado del inmueble y su entorno.
+        Por eso combinamos fuentes públicas de precios por m² con datos geográficos e inteligencia artificial.
+      </p>
+
+      <div class="about-cards">
+        <div class="about-card">
+          <span class="ac-num">01</span>
+          <span class="ac-ic">◧</span>
+          <h3>Valor de mercado en vivo</h3>
+          <p>Comparables reales de Adondevivir, Urbania y Remax alrededor del punto que elijas en el mapa, con rango de confianza.</p>
         </div>
-
-        <div class="examples">
-          <span>Probar:</span>
-          <button class="chip" data-ex="Av. Larco 123, Miraflores, Lima">Miraflores</button>
-          <button class="chip" data-ex="Av. El Golf 140, San Isidro, Lima">San Isidro</button>
-          <button class="chip" data-ex="Jirón de la Unión 300, Cercado de Lima">Cercado de Lima</button>
-          <button class="chip" data-ex="Calle Santa Catalina 111, Arequipa">Arequipa</button>
-          <button class="chip" data-ex="Av. España 400, Trujillo">Trujillo</button>
+        <div class="about-card">
+          <span class="ac-num">02</span>
+          <span class="ac-ic">◉</span>
+          <h3>Análisis del entorno con IA</h3>
+          <p>Evaluamos equipamiento comercial, servicios e infraestructura de la zona y ajustamos el valor con un factor de entorno.</p>
+        </div>
+        <div class="about-card">
+          <span class="ac-num">03</span>
+          <span class="ac-ic">◆</span>
+          <h3>Informe de tasación legal</h3>
+          <p>Genera el informe formal según el Reglamento Nacional de Tasaciones del Perú (D.S. N° 013-2002-VIVIENDA), listo para imprimir.</p>
         </div>
       </div>
 
-      <!-- Paso 2: Características -->
-      <div class="card">
-        <div class="card-head">
-          <span class="step">2</span>
-          <div>
-            <h2>Características de la propiedad</h2>
-            <p>Los valores por defecto son típicos; ajusta solo lo que conozcas. Los campos cambian según el tipo de inmueble.</p>
-          </div>
+      <a class="hero-cta about-cta" href="tasador.html">Probar la tasación ahora →</a>
+    </div>
+  </section>
+
+  <section class="lead" id="info-data">
+    <div class="lead-inner">
+      <span class="lead-tag">Contacto</span>
+      <h2>¿Quieres más información sobre nuestra data?</h2>
+      <p class="lead-sub">
+        Cuéntanos qué necesitas y te contactaremos con el detalle de nuestra metodología,
+        fuentes de datos, cobertura y cómo podemos apoyar tu proyecto o valuación.
+      </p>
+
+      <form id="leadForm" class="lead-form" novalidate>
+        <div class="lf-field">
+          <label for="lfNombre">Nombre completo</label>
+          <input type="text" id="lfNombre" name="nombre" required placeholder="Ej: María Fernández">
         </div>
-
-        <div class="field">
-          <label>Tipo de inmueble</label>
-          <div class="type-grid" id="typeButtons">
-            <button type="button" class="type-btn active" data-type="departamento">Departamento</button>
-            <button type="button" class="type-btn" data-type="casa">Casa</button>
-            <button type="button" class="type-btn" data-type="terreno">Terreno</button>
-            <button type="button" class="type-btn" data-type="local">Local comercial</button>
-            <button type="button" class="type-btn" data-type="oficina">Oficina</button>
-          </div>
+        <div class="lf-field">
+          <label for="lfEmail">Correo electrónico</label>
+          <input type="email" id="lfEmail" name="email" required placeholder="ej: maria@correo.com">
         </div>
-
-        <div class="field" data-types="departamento casa terreno local oficina">
-          <div class="label-row">
-            <label id="areaLabel">Área construida</label>
-            <span class="value-out" id="areaVal">70 m²</span>
-          </div>
-          <input type="range" id="area" min="20" max="600" step="1" value="70">
+        <div class="lf-field">
+          <label for="lfPhone">Teléfono / WhatsApp</label>
+          <input type="tel" id="lfPhone" name="telefono" placeholder="Ej: 999 888 777">
         </div>
-
-        <div class="field" data-types="departamento casa">
-          <div class="label-row">
-            <label>Dormitorios</label>
-            <span class="value-out" id="dormVal">2</span>
-          </div>
-          <input type="range" id="dorm" min="0" max="8" step="1" value="2">
+        <div class="lf-field">
+          <label for="lfInteres">¿Qué te interesa?</label>
+          <select id="lfInteres" name="interes">
+            <option value="datos" selected>Conocer más sobre la data y metodología</option>
+            <option value="inversion">Valorar propiedades para inversión</option>
+            <option value="informe">Informes de tasación legal</option>
+            <option value="venta">Precio de venta o compra de un inmueble</option>
+            <option value="alianza">Propuesta comercial / alianza</option>
+          </select>
         </div>
-
-        <div class="field" data-types="departamento casa">
-          <div class="label-row">
-            <label>Baños</label>
-            <span class="value-out" id="banoVal">2</span>
-          </div>
-          <input type="range" id="bano" min="1" max="8" step="1" value="2">
+        <div class="lf-field">
+          <label for="lfMsg">Mensaje</label>
+          <textarea id="lfMsg" name="mensaje" rows="4" placeholder="Cuéntanos brevemente qué necesitas…"></textarea>
         </div>
+        <button type="submit" class="lf-submit">Enviar solicitud</button>
+      </form>
 
-        <div class="field" data-types="departamento casa local oficina">
-          <div class="label-row">
-            <label>Antigüedad</label>
-            <span class="value-out" id="edadVal">10 años</span>
-          </div>
-          <input type="range" id="edad" min="0" max="50" step="1" value="10">
-        </div>
-
-        <div class="grid-2">
-          <div class="field" data-types="departamento oficina">
-            <label>Piso / planta</label>
-            <input type="number" id="piso" value="3" min="0" max="60">
-          </div>
-          <div class="field" data-types="departamento casa local oficina">
-            <label>Estado de conservación</label>
-            <select id="condicion">
-              <option value="excelente">Excelente / renovado</option>
-              <option value="bueno" selected>Bueno</option>
-              <option value="regular">Regular</option>
-              <option value="renovar">Necesita renovación</option>
-            </select>
-          </div>
-          <div class="field" data-types="departamento casa local oficina">
-            <label>Obra</label>
-            <select id="estado">
-              <option value="usado" selected>Usado (con antigüedad)</option>
-              <option value="nuevo">Nuevo / estreno</option>
-            </select>
-          </div>
-          <div class="field" data-types="departamento casa terreno local oficina">
-            <label>Zona dentro del distrito</label>
-            <select id="zona">
-              <option value="auto" selected>Auto (calculada)</option>
-              <option value="premium">Premium / frente al mar / exclusiva</option>
-              <option value="central">Céntrica / consolidada</option>
-              <option value="normal">Zona residencial estándar</option>
-              <option value="periferia">Periférica / en expansión</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Departamento -->
-        <div class="grid-2">
-          <div class="field" data-types="departamento">
-            <label>N° total de pisos del edificio</label>
-            <input type="number" id="totalFloors" value="5" min="1" max="60">
-          </div>
-          <div class="field" data-types="departamento">
-            <label>Ascensor</label>
-            <select id="elevator">
-              <option value="no" selected>No</option>
-              <option value="si">Sí</option>
-            </select>
-          </div>
-          <div class="field" data-types="departamento casa">
-            <label>Estacionamiento</label>
-            <select id="parking">
-              <option value="0">Sin estacionamiento</option>
-              <option value="1" selected>1</option>
-              <option value="2">2</option>
-              <option value="3">3 o más</option>
-            </select>
-          </div>
-          <div class="field" data-types="departamento">
-            <label>Depósito</label>
-            <select id="storage">
-              <option value="no" selected>No</option>
-              <option value="si">Sí</option>
-            </select>
-          </div>
-          <div class="field" data-types="departamento">
-            <label>Vista</label>
-            <select id="view">
-              <option value="none" selected>No especificada</option>
-              <option value="exterior">Exterior</option>
-              <option value="interior">Interior</option>
-            </select>
-          </div>
-          <div class="field" data-types="departamento casa">
-            <label>Acabados</label>
-            <select id="finishes">
-              <option value="basico">Básico</option>
-              <option value="intermedio" selected>Intermedio</option>
-              <option value="premium">Premium</option>
-            </select>
-          </div>
-          <div class="field" data-types="departamento">
-            <label>Áreas comunes / amenities</label>
-            <select id="amenities">
-              <option value="ninguno">Ninguno</option>
-              <option value="basico" selected>Básico</option>
-              <option value="medio">Medio (gym, seguridad 24h)</option>
-              <option value="completo">Completo (piscina, gym, sala)</option>
-            </select>
-          </div>
-          <div class="field" data-types="departamento">
-            <label>Mantenimiento mensual (S/.)</label>
-            <input type="number" id="maintenance" value="0" min="0" max="5000" step="10">
-          </div>
-          <div class="field" data-types="departamento">
-            <label>Régimen de propiedad</label>
-            <select id="regime">
-              <option value="independiente" selected>Independiente</option>
-              <option value="condominio">Condominio</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Casa -->
-        <div class="grid-2">
-          <div class="field" data-types="casa">
-            <div class="label-row">
-              <label>Área del terreno</label>
-              <span class="value-out" id="terrenoAreaVal">250 m²</span>
-            </div>
-            <input type="range" id="terrenoArea" min="80" max="2000" step="10" value="250">
-          </div>
-          <div class="field" data-types="casa">
-            <label>N° de pisos de la casa</label>
-            <input type="number" id="casaFloors" value="2" min="1" max="8">
-          </div>
-          <div class="field" data-types="casa terreno">
-            <div class="label-row">
-              <label>Frente del lote (ml)</label>
-              <span class="value-out" id="frontVal">10 ml</span>
-            </div>
-            <input type="range" id="front" min="3" max="60" step="1" value="10">
-          </div>
-          <div class="field" data-types="casa terreno">
-            <label>Forma del terreno</label>
-            <select id="shape">
-              <option value="regular" selected>Regular</option>
-              <option value="irregular">Irregular</option>
-            </select>
-          </div>
-          <div class="field" data-types="casa terreno">
-            <label>Topografía</label>
-            <select id="topography">
-              <option value="plana" selected>Plana</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="desnivel">Desnivel</option>
-            </select>
-          </div>
-          <div class="field" data-types="casa">
-            <label>Cerco perimetral</label>
-            <select id="fence">
-              <option value="si" selected>Sí</option>
-              <option value="no">No</option>
-            </select>
-          </div>
-          <div class="field" data-types="casa">
-            <div class="label-row">
-              <label>Jardín / áreas libres</label>
-              <span class="value-out" id="gardenVal">0 m²</span>
-            </div>
-            <input type="range" id="garden" min="0" max="500" step="5" value="0">
-          </div>
-          <div class="field" data-types="casa">
-            <div class="label-row">
-              <label>Remodelada hace (años)</label>
-              <span class="value-out" id="remodelVal">—</span>
-            </div>
-            <input type="range" id="remodel" min="0" max="50" step="1" value="0">
-          </div>
-        </div>
-
-        <!-- Terreno -->
-        <div class="grid-2">
-          <div class="field" data-types="terreno">
-            <label>Uso permitido (zonificación)</label>
-            <select id="zoning">
-              <option value="residencial" selected>Residencial</option>
-              <option value="comercial">Comercial</option>
-              <option value="mixto">Mixto</option>
-              <option value="industrial">Industrial</option>
-            </select>
-          </div>
-          <div class="field" data-types="terreno">
-            <label>Servicios a pie de lote</label>
-            <select id="services">
-              <option value="completo" selected>Agua, luz y desagüe</option>
-              <option value="parcial">Parciales</option>
-              <option value="ninguno">Sin servicios</option>
-            </select>
-          </div>
-          <div class="field" data-types="terreno">
-            <label>Esquina o intermedio</label>
-            <select id="corner">
-              <option value="intermedio" selected>Intermedio</option>
-              <option value="esquina">Esquina</option>
-            </select>
-          </div>
-          <div class="field" data-types="terreno">
-            <label>Habilitación urbana</label>
-            <select id="urbanization">
-              <option value="habilitado" selected>Habilitado</option>
-              <option value="no_habilitado">No habilitado</option>
-            </select>
-          </div>
-          <div class="field" data-types="terreno">
-            <label>Cercanía a vía principal</label>
-            <select id="road">
-              <option value="no" selected>No</option>
-              <option value="si">Sí</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- Columna derecha: Resultado -->
-    <section class="col-result">
-      <div class="card result-card" id="resultCard">
-        <div class="card-head">
-          <span class="step result">◉</span>
-          <div>
-            <h2>Tasación estimada</h2>
-            <p class="zone-label" id="zoneLabel">Esperando ubicación…</p>
-          </div>
-        </div>
-
-        <div class="result-body" id="resultBody">
-          <div class="empty-state">
-            <div class="empty-ic">◧</div>
-            <p>Ingresa una dirección o marca un punto en el mapa<br>para calcular el valor en tiempo real.</p>
-          </div>
-
-          <div class="price-block hidden">
-            <div class="price-label">Valor estimado de venta</div>
-            <div class="price-main" id="priceMain">S/ —</div>
-            <div class="price-usd" id="priceUSD">USD —</div>
-            <div class="price-cols">
-              <div class="p-col">
-                <span class="p-k">Valor comercial</span>
-                <span class="p-v" id="priceCommercial">—</span>
-              </div>
-              <div class="p-col p-col-real">
-                <span class="p-k">Valor de realización</span>
-                <span class="p-v" id="priceRealization">—</span>
-              </div>
-            </div>
-            <div class="price-range" id="priceRange">Rango: —</div>
-            <div class="per-m2" id="perM2">—</div>
-          </div>
-
-          <div class="rental hidden" id="rentalPanel">
-            <div class="rental-head">
-              <h3>Alquiler mensual estimado</h3>
-              <span class="rental-badge" id="rentalBadge">—</span>
-            </div>
-            <div class="rental-price" id="rentalPrice">S/ —</div>
-            <div class="rental-usd" id="rentalUSD">—</div>
-            <div class="rental-range" id="rentalRange">—</div>
-            <div class="per-m2" id="rentalPerM2">—</div>
-            <p class="rental-sub" id="rentalSub">—</p>
-            <ul class="market-list" id="rentalList"></ul>
-            <button type="button" class="see-more hidden" id="rentalMore">Ver más avisos</button>
-          </div>
-
-          <div class="confidence hidden" id="confidence">
-            <span class="conf-dot"></span>
-            <div>
-              <strong id="confTitle">Confianza alta</strong>
-              <p id="confMsg">—</p>
-            </div>
-          </div>
-
-          <div class="market hidden" id="marketPanel">
-            <div class="market-head">
-              <h3>Precios de mercado en vivo</h3>
-              <span class="market-badge" id="marketBadge">—</span>
-            </div>
-            <p class="market-sub" id="marketSub">Buscando avisos en Adondevivir, Urbania y Remax…</p>
-            <ul class="market-list" id="marketList"></ul>
-            <button type="button" class="see-more hidden" id="marketMore">Ver más avisos</button>
-          </div>
-
-          <div class="nexo hidden" id="nexoPanel">
-            <div class="nexo-head">
-              <h3>Proyectos nuevos en venta</h3>
-              <span class="nexo-badge" id="nexoBadge">—</span>
-            </div>
-            <p class="nexo-sub" id="nexoSub">Buscando proyectos nuevos en Nexo Inmobiliario…</p>
-            <ul class="nexo-list" id="nexoList"></ul>
-            <button type="button" class="see-more hidden" id="nexoAll">Ver todos los proyectos →</button>
-          </div>
-
-          <div class="env hidden" id="envPanel">
-            <div class="env-head">
-              <h3>Entorno socioeconómico</h3>
-              <span class="env-badge" id="envBadge">—</span>
-            </div>
-            <p class="env-sub" id="envSub">Analizando el entorno con IA…</p>
-            <div class="env-stats">
-              <div><span class="env-k">Equipamiento comercial</span><span id="envAmenities">—</span></div>
-              <div><span class="env-k">Servicios e infraestructura</span><span id="envServices">—</span></div>
-              <div><span class="env-k">Factor de entorno</span><span id="envFactorVal">×1.00</span></div>
-            </div>
-            <p class="env-why" id="envWhy"></p>
-          </div>
-
-          <div class="legal hidden" id="legalPanel">
-            <div class="legal-head">
-              <h3>Tasación legal</h3>
-              <span class="legal-badge">Informe RNT</span>
-            </div>
-            <p class="legal-sub">Genera el informe de tasación formal según el Reglamento Nacional de
-              Tasaciones del Perú (D.S. N° 013-2002-VIVIENDA): identificación, descripción, metodología,
-              análisis de mercado, valores y firmas. Listo para imprimir o exportar a Word.</p>
-            <button type="button" class="legal-btn" id="legalBtn">Haz tu tasación legal</button>
-          </div>
-
-          <div class="breakdown hidden" id="breakdown">
-            <h3>Desglose del cálculo</h3>
-            <table>
-              <tbody id="breakdownBody"></tbody>
-              <tfoot>
-                <tr>
-                  <td>Valor estimado</td>
-                  <td class="tfoot-val" id="footTotal">—</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-
-        <div class="disclaimer">
-          Estimación automática con fines referenciales, basada en precios promedio de mercado por m²
-          (Urbania Index, ASEI, BCRP). No sustituye una tasación formal ni una valorización registral.
-        </div>
-      </div>
-    </section>
-
-  </main>
+      <p id="leadOk" class="lead-ok hidden">¡Gracias! Hemos recibido tu solicitud y te contactaremos a la brevedad.</p>
+    </div>
+  </section>
 
   <footer class="footer">
     <span>Fuente de precios por m²: Urbania Index · ASEI · BCRP — Lima (actualizado 2026) · Geocodificación: OpenStreetMap (Nominatim).</span>
   </footer>
 
-  <div class="modal-overlay hidden" id="listingModal">
-    <div class="modal">
-      <div class="modal-head">
-        <h3 id="lmSource">Publicación del aviso</h3>
-        <button type="button" class="modal-close" id="lmClose" aria-label="Cerrar">×</button>
-      </div>
-      <div class="modal-body" id="lmBody"></div>
-    </div>
-  </div>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/valuation.js"></script>
-  <script src="js/geocode.js"></script>
-  <script src="js/app.js"></script>
+  <script>
+    document.getElementById("leadForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
+      e.target.classList.add("hidden");
+      document.getElementById("leadOk").classList.remove("hidden");
+    });
+  </script>
 </body>
 </html>

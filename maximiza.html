@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maximiza tu propiedad — Tasador Perú</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <a href="/" class="brand-link">
+        <span class="logo">◧</span>
+        <div>
+          <h1>Tasador <span>Perú</span></h1>
+          <p>Tasación automática en tiempo real</p>
+        </div>
+      </a>
+    </div>
+    <div class="topbar-meta">
+      <span class="badge-live"><i></i> MAXIMIZA</span>
+      <span class="badge-data">Asesor IA a tu favor</span>
+      <a class="badge-link" href="/">← Volver al tasador</a>
+    </div>
+  </header>
+
+  <main class="max-wrap">
+
+    <div class="max-hero">
+      <h1>Maximiza tu propiedad</h1>
+      <p>Descubre cuánto puedes ganar construyendo sobre tu terreno — con albañil, con una
+        constructora o en convenio con una inmobiliaria — y deja que la IA negocie <strong>a tu favor</strong>.</p>
+    </div>
+
+    <!-- Paso 1: tu propiedad -->
+    <div class="card">
+      <div class="card-head">
+        <span class="step">1</span>
+        <div>
+          <h2>Tu propiedad</h2>
+          <p>Ubicación y características del terreno. Si ya hiciste una tasación, sus datos se cargan automáticamente.</p>
+        </div>
+      </div>
+
+      <div class="search-row">
+        <div class="autocomplete">
+          <svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+          <input type="text" id="addressInput" placeholder="Ej: Av. Larco 123, Miraflores, Lima" autocomplete="off">
+          <button type="button" id="geoBtn" title="Usar mi ubicación actual">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm0-5.5a2.5 2.5 0 1 1 2.5-2.5 2.5 2.5 0 0 1-2.5 2.5z"/></svg>
+          </button>
+          <div id="suggestions" class="suggestions hidden"></div>
+        </div>
+      </div>
+
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div id="mapStatus" class="map-status hidden"></div>
+      </div>
+      <div id="zoneLabel" class="max-zone">Selecciona la ubicación de tu terreno en el mapa o búscala arriba</div>
+
+      <div class="examples">
+        <span>Probar:</span>
+        <button class="chip" data-ex="Av. Larco 123, Miraflores, Lima">Miraflores</button>
+        <button class="chip" data-ex="Av. El Golf 140, San Isidro, Lima">San Isidro</button>
+        <button class="chip" data-ex="Jirón de la Unión 300, Cercado de Lima">Cercado de Lima</button>
+        <button class="chip" data-ex="Calle Santa Catalina 111, Arequipa">Arequipa</button>
+        <button class="chip" data-ex="Av. España 400, Trujillo">Trujillo</button>
+      </div>
+
+      <div class="field">
+        <div class="label-row">
+          <label>Área del terreno</label>
+          <div class="value-input-wrap">
+            <input type="number" id="landAreaVal" class="value-input" value="200" min="10" max="50000">
+            <span class="value-unit">m²</span>
+          </div>
+        </div>
+        <input type="range" id="landArea" min="80" max="10000" step="10" value="200">
+      </div>
+
+      <div class="field">
+        <label>Zonificación</label>
+        <select id="zoning" class="select">
+          <option value="residencial_media">Residencial de densidad media (R3)</option>
+          <option value="residencial_alta">Residencial de densidad alta (R5)</option>
+          <option value="comercial">Comercial (C)</option>
+          <option value="mixto">Mixto (RM)</option>
+          <option value="otro" selected>Sin zonificación / rural</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="label-row">
+          <label>Presupuesto en efectivo para construir</label>
+          <span class="value-out" id="budgetVal">S/ 400,000</span>
+        </div>
+        <input type="range" id="budget" min="0" max="3000000" step="10000" value="400000">
+      </div>
+
+      <div class="field">
+        <label>¿Qué buscas con tu propiedad?</label>
+        <select id="objective" class="select">
+          <option value="venta" selected>Vender con la mayor ganancia</option>
+          <option value="renta">Generar renta mensual</option>
+          <option value="equilibrio">Equilibrio entre ganancia y rapidez</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="label-row">
+          <label>Fotos del predio</label>
+          <span class="photo-hint">opcional · mejora el cálculo con IA</span>
+        </div>
+        <div class="photo-zone" id="photoZone">
+          <input type="file" id="photoInput" accept="image/*" multiple hidden>
+          <button type="button" class="photo-pick" id="photoPick">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 16.2 4.8 12 3.4 13.4 9 19l11.6-11.6L19.2 6z"/></svg>
+            Añadir fotos (fachada, interior, terreno)
+          </button>
+          <div class="photo-previews" id="photoPreviews"></div>
+        </div>
+        <div class="photo-actions hidden" id="photoActions">
+          <button type="button" class="photo-analyze" id="photoAnalyze">✦ Analizar fotos con IA</button>
+        </div>
+        <div id="photoStatus" class="photo-status"></div>
+        <div id="photoResult" class="photo-result hidden"></div>
+      </div>
+    </div>
+
+    <!-- Paso 2: cómo construir -->
+    <div class="card">
+      <div class="card-head">
+        <span class="step">2</span>
+        <div>
+          <h2>¿Cómo quieres construir?</h2>
+          <p>Selecciona una opción o deja marcada "Comparar las 3" para ver todas.</p>
+        </div>
+      </div>
+      <div class="mode-grid" id="modeGrid">
+        <button type="button" class="mode-card" data-mode="albañil">
+          <span class="mode-ic">👷</span>
+          <span class="mode-name">Con albañil</span>
+          <span class="mode-sub">Autoconstrucción que tú gestionas. Menos costo, más dedicación.</span>
+        </button>
+        <button type="button" class="mode-card" data-mode="constructora">
+          <span class="mode-ic">🏗️</span>
+          <span class="mode-name">Constructora</span>
+          <span class="mode-sub">Empresa constructora llave en mano con garantías. Más costo, menos riesgo.</span>
+        </button>
+        <button type="button" class="mode-card" data-mode="inmobiliaria">
+          <span class="mode-ic">🏢</span>
+          <span class="mode-name">Inmobiliaria</span>
+          <span class="mode-sub">Ellos construyen y venden; tú aportas el terreno y recibes tu parte.</span>
+        </button>
+        <button type="button" class="mode-card active" data-mode="todas">
+          <span class="mode-ic">⚖️</span>
+          <span class="mode-name">Comparar las 3</span>
+          <span class="mode-sub">Ve todas las opciones lado a lado con la recomendación de la IA.</span>
+        </button>
+      </div>
+    </div>
+
+    <button type="button" class="max-calc-btn" id="calcBtn">Calcular mi máximo potencial</button>
+    <div class="max-hint" id="calcHint">Ubica tu terreno para calcular.</div>
+
+    <!-- Resultados -->
+    <div class="max-results hidden" id="results">
+
+      <div class="max-summary">
+        <div class="ms-block">
+          <span class="ms-k">Tu terreno hoy</span>
+          <span class="ms-v" id="sumLand">S/ —</span>
+          <span class="ms-s" id="sumLandZone">—</span>
+        </div>
+        <div class="ms-arrow">→</div>
+        <div class="ms-block strong">
+          <span class="ms-k">Potencial construido</span>
+          <span class="ms-v" id="sumBuilt">S/ —</span>
+          <span class="ms-s" id="sumBuiltDetail">—</span>
+        </div>
+        <div class="ms-block gain">
+          <span class="ms-k">Ganancia potencial</span>
+          <span class="ms-v" id="sumGain">S/ —</span>
+          <span class="ms-s" id="sumGainPct">—</span>
+        </div>
+      </div>
+
+      <div class="max-reco hidden" id="recoCallout"></div>
+
+      <div class="mode-results" id="modeResults"></div>
+
+      <div class="card ai-card">
+        <div class="card-head">
+          <span class="step">✦</span>
+          <div>
+            <h2>Asesor IA — trabaja a tu favor</h2>
+            <p id="aiStatus">La IA analiza tu caso y defiende tus intereses frente a albañiles, constructoras e inmobiliarias…</p>
+          </div>
+        </div>
+        <div id="aiBody"></div>
+      </div>
+
+      <p class="max-disclaimer">
+        Cifras referenciales y estimativas para orientar tu decisión; no constituyen cotización ni asesoría legal.
+        Consulta un arquitecto, ingeniero y abogado antes de firmar cualquier contrato.
+      </p>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <span>Maximiza tu propiedad · Asesor IA (Grok/xAI) · Valores de referencia: Tasador Perú.</span>
+  </footer>
+
+  <div class="modal-overlay hidden" id="provModal">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <h3 id="provModalTitle">Proveedores disponibles</h3>
+        <button type="button" class="modal-close" id="provClose" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal-body" id="provModalBody"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/valuation.js"></script>
+  <script src="js/geocode.js"></script>
+  <script src="js/proveedores.js"></script>
+  <script src="js/maximiza.js"></script>
+</body>
+</html>

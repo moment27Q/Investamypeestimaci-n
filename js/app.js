@@ -25,12 +25,7 @@
     marketSub: $("marketSub"),
     marketList: $("marketList"),
     marketMore: $("marketMore"),
-    nexoPanel: $("nexoPanel"),
-    nexoBadge: $("nexoBadge"),
-    nexoSub: $("nexoSub"),
-    nexoList: $("nexoList"),
     nexoLink: $("nexoLink"),
-    nexoAll: $("nexoAll"),
     rentalPanel: $("rentalPanel"),
     rentalBadge: $("rentalBadge"),
     rentalPrice: $("rentalPrice"),
@@ -107,8 +102,6 @@
     rentFetching: false,
     rentSeq: 0,
     rentRest: [],
-    nexoFetching: false,
-    nexoSeq: 0,
     envProfile: null,
     areaTouched: false,
     zoneTouched: false
@@ -227,7 +220,6 @@
     recompute();
     fetchMarket();
     fetchRentals();
-    fetchNexo();
     fetchEnvironment();
   }
 
@@ -246,7 +238,6 @@
       recompute();
       fetchMarket();
       fetchRentals();
-      fetchNexo();
       fetchEnvironment();
     } catch (e) {
       showStatus("No se pudo geocodificar ese punto.");
@@ -299,13 +290,30 @@
       el.classList.toggle("hidden", !el.dataset.types.split(" ").includes(type));
     });
     els.area.min = type === "terreno" ? 80 : 30;
-    els.area.max = type === "terreno" ? 2000 : 400;
+    els.area.max = type === "terreno" ? 10000 : 400;
     els.areaLabel.textContent = type === "terreno" ? "Área del terreno" : "Área construida";
     if (!state.areaTouched) {
       const med = type === "terreno" ? 180 : 90;
       els.area.value = med;
-      els.areaVal.textContent = med + " m²";
+      setVal(els.areaVal, med, (v) => v + " m²");
     }
+  }
+
+  function setVal(el, raw, fmt) {
+    if (!el) return;
+    if (el.tagName === "INPUT") {
+      el.value = Math.round(Number(raw) || 0);
+    } else {
+      el.textContent = fmt ? fmt(raw) : raw;
+    }
+  }
+
+  function readAreaValue() {
+    if (els.areaVal && els.areaVal.tagName === "INPUT") {
+      const v = parseFloat(els.areaVal.value);
+      if (!isNaN(v) && v > 0) return v;
+    }
+    return parseFloat(els.area.value) || 70;
   }
 
   const RANGES = [
@@ -322,7 +330,23 @@
     const range = els[inp];
     range.addEventListener("input", () => {
       if (inp === "area") state.areaTouched = true;
-      els[val].textContent = fmt(range.value);
+      setVal(els[val], range.value, fmt);
+      recompute();
+    });
+  });
+
+  [["areaVal", "area", "area"], ["terrenoAreaVal", "terrenoArea", null]].forEach(([num, range, touchedKey]) => {
+    const numEl = els[num];
+    const rangeEl = els[range];
+    if (!numEl || !rangeEl) return;
+    numEl.addEventListener("input", () => {
+      let v = parseFloat(numEl.value);
+      if (isNaN(v)) return;
+      v = Math.max(10, Math.min(50000, v));
+      const sMin = parseFloat(rangeEl.min);
+      const sMax = parseFloat(rangeEl.max);
+      rangeEl.value = v < sMin ? sMin : v > sMax ? sMax : v;
+      if (touchedKey === "area") state.areaTouched = true;
       recompute();
     });
   });
@@ -370,8 +394,6 @@
     goNexoPage();
   });
 
-  els.nexoAll.addEventListener("click", goNexoPage);
-
   /* ---------------- Informe de tasación legal ---------------- */
   function openLegalReport() {
     const loc = state.location;
@@ -401,7 +423,7 @@
     const type = active ? active.dataset.type : "departamento";
     return {
       type,
-      area: parseFloat(els.area.value) || 70,
+      area: readAreaValue(),
       bedrooms: parseInt(els.dorm.value) || 2,
       bathrooms: parseInt(els.bano.value) || 2,
       age: parseInt(els.edad.value) || 10,
@@ -418,7 +440,9 @@
       amenities: els.amenities.value,
       maintenance: els.maintenance.value,
       regime: els.regime.value,
-      terrenoArea: parseFloat(els.terrenoArea.value) || null,
+      terrenoArea: (els.terrenoAreaVal && els.terrenoAreaVal.tagName === "INPUT")
+        ? (parseFloat(els.terrenoAreaVal.value) || null)
+        : (parseFloat(els.terrenoArea.value) || null),
       casaFloors: parseInt(els.casaFloors.value) || null,
       front: parseFloat(els.front.value) || null,
       shape: els.shape.value,
@@ -556,7 +580,7 @@
       if (!state.areaTouched && data.count >= 2 && data.medianArea) {
         const autoArea = Math.round(clampVal(data.medianArea, 25, 400));
         els.area.value = autoArea;
-        els.areaVal.textContent = autoArea + " m²";
+        setVal(els.areaVal, autoArea, (v) => v + " m²");
       }
       recompute();
     } catch (e) {
@@ -761,178 +785,6 @@
     els.rentalMore.classList.add("hidden");
   });
 
-  /* ---------------- Proyectos nuevos (Nexo Inmobiliario) ---------------- */
-  async function fetchNexo() {
-    const loc = state.location;
-    if (!loc || (!loc.district && !loc.city)) return;
-    const seq = ++state.nexoSeq;
-    state.nexoFetching = true;
-    els.nexoPanel.classList.remove("hidden");
-    els.nexoBadge.textContent = "Buscando…";
-    els.nexoBadge.className = "nexo-badge loading";
-    els.nexoSub.textContent = "Buscando proyectos nuevos de Nexo Inmobiliario en " +
-      (loc.district || loc.city) + "… esto puede tardar 10–40 s.";
-
-    try {
-      const params = new URLSearchParams({
-        district: loc.district || "",
-        city: loc.city || ""
-      });
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 90000);
-      let res;
-      try {
-        res = await fetch("/api/nexo?" + params.toString(), { signal: ctrl.signal });
-      } finally {
-        clearTimeout(timer);
-      }
-      const data = await res.json().catch(() => ({}));
-      if (seq !== state.nexoSeq || !state.location) return;
-      if (!res.ok || data.error) {
-        const detail = data.detail || data.error || ("HTTP " + res.status);
-        throw new Error(detail);
-      }
-      renderNexo(data);
-    } catch (e) {
-      if (seq !== state.nexoSeq) return;
-      els.nexoBadge.textContent = "Sin datos";
-      els.nexoBadge.className = "nexo-badge empty";
-      els.nexoSub.textContent = "No se pudieron cargar los proyectos: " + (e.message || "sin respuesta") +
-        ". Vuelve a buscar para reintentar.";
-      els.nexoList.innerHTML = "";
-      els.nexoLink.textContent = "Proyectos nuevos ↗";
-      els.nexoAll.classList.add("hidden");
-    } finally {
-      if (seq === state.nexoSeq) state.nexoFetching = false;
-    }
-  }
-
-  function renderNexo(data) {
-    els.nexoLink.textContent = data.count
-      ? "Proyectos nuevos (" + data.count + ") ↗"
-      : "Proyectos nuevos ↗";
-    els.nexoAll.classList.toggle("hidden", !data.count);
-    if (data.count) els.nexoAll.textContent = "Ver todos los proyectos (" + data.count + ") →";
-    if (data.count >= 1) {
-      els.nexoBadge.textContent = data.count + " proyectos";
-      els.nexoBadge.className = "nexo-badge";
-    } else {
-      els.nexoBadge.textContent = "0 proyectos";
-      els.nexoBadge.className = "nexo-badge empty";
-    }
-
-    const zone = data.district || data.city || "la zona";
-    els.nexoSub.textContent = data.count
-      ? "Proyectos nuevos (departamentos) en " + zone + ": desde S/ " + fmt(data.minPrice) +
-        " hasta S/ " + fmt(data.maxPrice) + ". Fuente: Nexo Inmobiliario."
-      : "No se encontraron proyectos nuevos de Nexo Inmobiliario en " + zone + ".";
-
-    els.nexoList.innerHTML = "";
-    data.projects.forEach((p) => {
-      const li = document.createElement("li");
-      if (p.image) {
-        const img = document.createElement("img");
-        img.className = "nexo-thumb";
-        img.loading = "lazy";
-        img.src = p.image;
-        img.onerror = () => { img.style.display = "none"; };
-        li.appendChild(img);
-      }
-      const meta = [];
-      if (p.areaMin != null && p.areaMax != null) meta.push(p.areaMin + "–" + p.areaMax + " m²");
-      else if (p.areaMin != null) meta.push(p.areaMin + " m²");
-      if (p.bedroomsMin != null && p.bedroomsMax != null) meta.push(p.bedroomsMin + "–" + p.bedroomsMax + " dorm.");
-      if (p.builder) meta.push(p.builder);
-      const info = document.createElement("div");
-      info.className = "nexo-info";
-      info.innerHTML = '<span class="n-name">' + esc(p.name) +
-        '</span><span class="n-meta">' + esc(meta.join(" · ")) + "</span>";
-      const price = document.createElement("div");
-      price.className = "nexo-price";
-      price.textContent = "S/ " + fmt(p.priceFrom);
-      const phase = document.createElement("span");
-      phase.className = "nexo-phase";
-      phase.textContent = p.phase;
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "nexo-btn";
-      btn.textContent = "Ver";
-      btn.addEventListener("click", () => openListingNexo(p));
-      li.appendChild(info);
-      li.appendChild(price);
-      li.appendChild(phase);
-      li.appendChild(btn);
-      els.nexoList.appendChild(li);
-    });
-  }
-
-  /* ---------------- Modal de proyecto nuevo (Nexo) ---------------- */
-  function openListingNexo(p) {
-    els.listingModal.classList.remove("hidden");
-    document.body.classList.add("no-scroll");
-    els.lmSource.textContent = "Nexo Inmobiliario · proyecto nuevo";
-    renderNexoModal(p, null);
-    if (p.url) {
-      fetch("/api/listing-detail?url=" + encodeURIComponent(p.url))
-        .then((res) => res.json())
-        .then((d) => {
-          if (els.listingModal.classList.contains("hidden")) return;
-          renderNexoModal(p, d);
-        })
-        .catch(() => {});
-    }
-  }
-
-  function renderNexoModal(p, detail) {
-    const meta = [];
-    if (p.areaMin != null && p.areaMax != null) meta.push(p.areaMin + "–" + p.areaMax + " m²");
-    else if (p.areaMin != null) meta.push(p.areaMin + " m²");
-    if (p.bedroomsMin != null && p.bedroomsMax != null) meta.push(p.bedroomsMin + "–" + p.bedroomsMax + " dorm.");
-    if (p.phase) meta.push(p.phase);
-
-    const images = detail && detail.images && detail.images.length ? detail.images : p.image ? [p.image] : [];
-    const gal = images.length
-      ? '<div class="lm-gallery"><img class="lm-main" src="' + esc(images[0]) +
-        '" alt="Proyecto" onerror="this.closest(\'.lm-gallery\').style.display=\'none\'">' +
-        (images.length > 1
-          ? '<div class="lm-thumbs">' + images.slice(1, 6).map((s) =>
-              '<img src="' + esc(s) + '" alt="Foto" loading="lazy" onerror="this.style.display=\'none\'">'
-            ).join("") + "</div>"
-          : "") +
-        "</div>"
-      : '<div class="lm-gallery lm-placeholder">Sin imágenes disponibles</div>';
-
-    const detailHtml =
-      detail && detail.description
-        ? '<p class="lm-desc">' + esc(detail.description) + "</p>"
-        : "";
-
-    const openBtn = p.url
-      ? '<a class="lm-open" href="' + esc(p.url) + '" target="_blank" rel="noopener">Ver proyecto original ↗</a>'
-      : "";
-
-    const where = [p.direccion, p.distrito].filter(Boolean).join(", ");
-
-    els.lmBody.innerHTML =
-      '<div class="lm-grid">' +
-        '<div class="lm-media">' + gal + openBtn + "</div>" +
-        '<div class="lm-info">' +
-          '<h4>' + esc(p.name) + "</h4>" +
-          '<div class="lm-prices">' +
-            '<div class="lm-ask"><span class="lm-k">Precio desde (proyecto)</span>' +
-            '<span class="lm-ask-v">S/ ' + fmt(p.priceFrom) + '</span>' +
-            '<span class="lm-ask-m2">' + esc(meta.join(" · ")) + "</span></div>" +
-            (p.builder
-              ? '<div class="lm-est"><span class="lm-k">Inmobiliaria</span>' +
-                '<span class="lm-est-v">' + esc(p.builder) + '</span>' +
-                (where ? '<span class="lm-est-m2">' + esc(where) + "</span>" : "") +
-                "</div>"
-              : "") +
-          "</div>" +
-          detailHtml +
-        "</div>" +
-      "</div>";
-  }
 
   /* ---------------- Modal de publicación de alquiler ---------------- */
   function openListingRent(l) {

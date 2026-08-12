@@ -26,6 +26,8 @@ try {
 }
 
 const { getEnvironmentProfile } = require("./environment");
+const { getAdvisory } = require("./asesor");
+const { analyzePhotos } = require("./vision");
 const geocoder = require("./geocoder");
 
 const ROOT = __dirname;
@@ -239,8 +241,43 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (parsed.pathname === "/api/environment") {
+  if (parsed.pathname === "/api/maximiza") {
     const q = parsed.query;
+    const f = (v, d) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
+    const ctx = {
+      district: q.district || null,
+      city: q.city || null,
+      landArea: f(q.landArea, 0),
+      builtArea: f(q.builtArea, 0),
+      zoning: q.zoning || "otro",
+      budget: f(q.budget, 0),
+      objective: q.objective || "venta",
+      mode: q.mode || "todas",
+      salePerM2: f(q.salePerM2, 0),
+      landValue: f(q.landValue, 0),
+      saleTotal: f(q.saleTotal, 0),
+      rentaMonthly: f(q.rentaMonthly, 0),
+      costAlbanil: f(q.costAlbanil, 0),
+      costConstructora: f(q.costConstructora, 0),
+      shareDefault: f(q.shareDefault, 50),
+      fotoAnalisis: q.fotoAnalisis || null
+    };
+    getAdvisory(ctx)
+      .then((data) => {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store"
+        });
+        res.end(JSON.stringify(data));
+      })
+      .catch((e) => {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ enabled: false, reason: e.message, plan: null }));
+      });
+    return;
+  }
+
+  if (parsed.pathname === "/api/environment") {    const q = parsed.query;
     const loc = {
       lat: q.lat != null ? parseFloat(q.lat) : null,
       lon: q.lon != null ? parseFloat(q.lon) : null,
@@ -264,6 +301,45 @@ const server = http.createServer((req, res) => {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Error en análisis de entorno", detail: e.message }));
       });
+    return;
+  }
+
+  if (req.method === "POST" && parsed.pathname === "/api/analiza-fotos") {
+    let body = "";
+    req.on("data", (d) => {
+      body += d;
+      if (body.length > 50000000) req.destroy();
+    });
+    req.on("end", async () => {
+      let payload = {};
+      try {
+        payload = JSON.parse(body || "{}");
+      } catch (e) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ enabled: false, reason: "JSON inválido" }));
+        return;
+      }
+      const loc = {
+        district: payload.district || null,
+        city: payload.city || null,
+        lat: payload.lat != null ? parseFloat(payload.lat) : null,
+        lon: payload.lon != null ? parseFloat(payload.lon) : null
+      };
+      const images = (Array.isArray(payload.images) ? payload.images : [])
+        .filter((u) => typeof u === "string" && u.startsWith("data:image/"))
+        .slice(0, 4);
+      try {
+        const data = await analyzePhotos(loc, images);
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store"
+        });
+        res.end(JSON.stringify(data));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ enabled: false, reason: e.message }));
+      }
+    });
     return;
   }
 
