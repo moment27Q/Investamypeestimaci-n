@@ -97,7 +97,11 @@
     tasarBtn: $("tasarBtn"),
     resultCard: $("resultCard"),
     descripcion: $("descripcion"),
-    descNote: $("descNote")
+    descNote: $("descNote"),
+    propertyPhotos: $("propertyPhotos"),
+    propertyPhotoPreviews: $("propertyPhotoPreviews"),
+    propertyPhotoStatus: $("propertyPhotoStatus"),
+    propertyPhotoNote: $("propertyPhotoNote")
   };
 
   const state = {
@@ -116,12 +120,132 @@
     zoneTouched: false,
     tasado: false,
     descAdj: null,
-    descSeq: 0
+    descSeq: 0,
+    photos: [],
+    photoAdj: null,
+    photoSeq: 0
   };
 
   const fmt = (n) => Math.round(n).toLocaleString("es-PE");
   const fmtUSD = (n) =>
     Math.round(n).toLocaleString("es-PE", { maximumFractionDigits: 0 });
+
+  /* ---------------- Fotos de la propiedad ---------------- */
+  const MAX_PROPERTY_PHOTOS = 4;
+  const MAX_PROPERTY_PHOTO_SIZE = 10 * 1024 * 1024;
+  const PROPERTY_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+  function setPropertyPhotoStatus(message, isError) {
+    if (!els.propertyPhotoStatus) return;
+    els.propertyPhotoStatus.textContent = message;
+    els.propertyPhotoStatus.classList.toggle("err", !!isError);
+  }
+
+  function renderPropertyPhotos() {
+    if (!els.propertyPhotoPreviews) return;
+    els.propertyPhotoPreviews.innerHTML = "";
+    state.photos.forEach((photo, index) => {
+      const item = document.createElement("div");
+      item.className = "photo-item";
+      const image = document.createElement("img");
+      image.src = photo.url;
+      image.alt = "Foto de la propiedad " + (index + 1);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "photo-remove";
+      remove.title = "Quitar foto " + (index + 1);
+      remove.setAttribute("aria-label", remove.title);
+      remove.dataset.photoIndex = index;
+      remove.textContent = "×";
+      item.append(image, remove);
+      els.propertyPhotoPreviews.appendChild(item);
+    });
+  }
+
+  function preparePropertyPhoto(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const image = new Image();
+        image.onload = () => {
+          const maxEdge = 960;
+          const scale = Math.min(1, maxEdge / Math.max(image.width, image.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        image.onerror = reject;
+        image.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function addPropertyPhotos(files) {
+    const available = MAX_PROPERTY_PHOTOS - state.photos.length;
+    const selected = files.slice(0, Math.max(0, available));
+    const hasExcess = files.length > selected.length;
+    let hasInvalidFile = false;
+
+    for (const file of selected) {
+      if (!PROPERTY_IMAGE_TYPES.includes(file.type) || file.size > MAX_PROPERTY_PHOTO_SIZE) {
+        hasInvalidFile = true;
+        continue;
+      }
+      try {
+        const dataUrl = await preparePropertyPhoto(file);
+        state.photos.push({ file, url: URL.createObjectURL(file), dataUrl });
+      } catch (e) {
+        hasInvalidFile = true;
+      }
+    }
+    state.photoAdj = null;
+    state.photoSeq++;
+    renderPropertyPhotos();
+
+    const count = state.photos.length;
+    if (hasExcess || hasInvalidFile) {
+      const reason = hasExcess
+        ? "El límite es de " + MAX_PROPERTY_PHOTOS + " fotos."
+        : "Solo se aceptan JPG, PNG o WebP de hasta 10 MB.";
+      setPropertyPhotoStatus(count + " de " + MAX_PROPERTY_PHOTOS + " foto(s) añadida(s). " + reason, true);
+    } else {
+      setPropertyPhotoStatus(count + " de " + MAX_PROPERTY_PHOTOS + " foto(s) añadida(s).", false);
+    }
+    if (state.tasado) {
+      recompute();
+      fetchPropertyPhotos();
+    }
+  }
+
+  if (els.propertyPhotos) {
+    els.propertyPhotos.addEventListener("change", async () => {
+      await addPropertyPhotos(Array.from(els.propertyPhotos.files || []));
+      els.propertyPhotos.value = "";
+    });
+  }
+  if (els.propertyPhotoPreviews) {
+    els.propertyPhotoPreviews.addEventListener("click", (event) => {
+      const button = event.target.closest(".photo-remove");
+      if (!button) return;
+      const index = Number(button.dataset.photoIndex);
+      const photo = state.photos[index];
+      if (!photo) return;
+      URL.revokeObjectURL(photo.url);
+      state.photos.splice(index, 1);
+      state.photoAdj = null;
+      state.photoSeq++;
+      if (els.propertyPhotoNote) els.propertyPhotoNote.classList.add("hidden");
+      renderPropertyPhotos();
+      setPropertyPhotoStatus(state.photos.length
+        ? state.photos.length + " de " + MAX_PROPERTY_PHOTOS + " foto(s) añadida(s)."
+        : "Puedes añadir hasta 4 fotos en JPG, PNG o WebP.", false);
+      if (state.tasado) recompute();
+    });
+  }
 
   /* ---------------- Mapa ---------------- */
   const map = L.map("map").setView([-12.09, -77.04], 11);
@@ -258,6 +382,7 @@
     state.rentMarket = null;
     state.envProfile = null;
     state.descAdj = null;
+    state.photoAdj = null;
     state.marketSeq++;
     state.rentSeq++;
     state.descSeq++;
@@ -273,6 +398,7 @@
     els.marketPanel.classList.add("hidden");
     els.envPanel.classList.add("hidden");
     els.descNote.classList.add("hidden");
+    if (els.propertyPhotoNote) els.propertyPhotoNote.classList.add("hidden");
   }
 
   function runValuation() {
@@ -288,6 +414,7 @@
     fetchRentals();
     fetchEnvironment();
     fetchDescription();
+    fetchPropertyPhotos();
     saveSnapshot();
     if (els.resultCard) els.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
@@ -647,7 +774,7 @@
   function recompute() {
     if (!state.tasado || !state.location) return;
     const inputs = readInputs();
-    const r = computeValuation(state.location, inputs, state.market, state.envProfile, state.descAdj);
+    const r = computeValuation(state.location, inputs, state.market, state.envProfile, state.descAdj, state.photoAdj);
 
     const priceBlock = document.querySelector(".price-block");
     const empty = document.querySelector(".empty-state");
@@ -724,7 +851,53 @@
     } else {
       els.descNote.classList.add("hidden");
     }
+    if (state.photoAdj && state.photoAdj.used) {
+      const pct = (state.photoAdj.factor - 1) * 100;
+      const sign = pct > 0 ? "+" : "";
+      els.propertyPhotoNote.classList.remove("hidden");
+      els.propertyPhotoNote.innerHTML = "<b>IA con fotos</b> revisó el estado visible y los acabados" +
+        (pct ? ": ajuste " + sign + pct.toFixed(1) + "%" : ": sin ajuste") + ". " +
+        esc(state.photoAdj.rationale || state.photoAdj.observations || "La evidencia visual fue incorporada de forma conservadora.");
+    } else if (els.propertyPhotoNote) {
+      els.propertyPhotoNote.classList.add("hidden");
+    }
     saveSnapshot();
+  }
+
+  async function fetchPropertyPhotos() {
+    if (!state.photos.length || !state.location) return;
+    const seq = ++state.photoSeq;
+    setPropertyPhotoStatus("La IA está revisando " + state.photos.length + " foto(s) para ajustar la tasación…", false);
+    try {
+      const res = await fetch("/api/analiza-fotos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "valuation",
+          district: state.location.district || "",
+          city: state.location.city || "",
+          lat: state.location.lat != null ? state.location.lat : null,
+          lon: state.location.lon != null ? state.location.lon : null,
+          inputs: readInputs(),
+          images: state.photos.slice(0, MAX_PROPERTY_PHOTOS).map((photo) => photo.dataUrl)
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (seq !== state.photoSeq) return;
+      state.photoAdj = data && data.used ? data : null;
+      if (state.photoAdj) {
+        const pct = (state.photoAdj.factor - 1) * 100;
+        setPropertyPhotoStatus("Fotos analizadas por IA. Ajuste visual: " + (pct > 0 ? "+" : "") + pct.toFixed(1) + "%.", false);
+      } else {
+        setPropertyPhotoStatus("Las fotos no pudieron aportar un ajuste: " + ((data && data.reason) || "se mantiene el cálculo base."), true);
+      }
+      recompute();
+    } catch (e) {
+      if (seq !== state.photoSeq) return;
+      state.photoAdj = null;
+      setPropertyPhotoStatus("No se pudo analizar las fotos; se mantiene el cálculo base.", true);
+      recompute();
+    }
   }
 
   /* ---------------- Precios de mercado (comparables reales) ---------------- */

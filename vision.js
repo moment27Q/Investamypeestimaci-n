@@ -198,4 +198,73 @@ async function analyzePhotos(loc, images) {
   return { enabled: false, reason: lastErr ? lastErr.message : "La IA de visión no respondió" };
 }
 
-module.exports = { analyzePhotos };
+function buildValuationAnalysis(raw) {
+  const condition = pick(raw, ["condition", "condicion", "estado"], "bueno").toLowerCase();
+  const finishes = pick(raw, ["finishes", "acabados"], "intermedio").toLowerCase();
+  const factor = Math.max(0.92, Math.min(1.08, Number(raw.factor) || 1));
+  return {
+    enabled: true,
+    used: true,
+    model: VISION_MODEL,
+    factor: Math.round(factor * 1000) / 1000,
+    condition: ["excelente", "bueno", "regular", "renovar"].includes(condition) ? condition : "bueno",
+    finishes: ["premium", "intermedio", "basico"].includes(finishes) ? finishes : "intermedio",
+    observations: String(pick(raw, ["observaciones", "observacion", "notas"], "")).slice(0, 400),
+    rationale: String(pick(raw, ["rationale", "razon", "justificacion"], "")).slice(0, 280),
+    analyzedAt: new Date().toISOString()
+  };
+}
+
+async function inferValuationVision(loc, images, inputs) {
+  const type = String(inputs && inputs.type || "propiedad");
+  const context = [
+    "País: Perú",
+    loc && loc.district ? "Distrito: " + loc.district : "",
+    loc && loc.city ? "Ciudad: " + loc.city : "",
+    "Tipo: " + type,
+    inputs && inputs.age != null ? "Antigüedad declarada: " + inputs.age + " años" : "",
+    inputs && inputs.condition ? "Conservación declarada: " + inputs.condition : "",
+    inputs && inputs.finishes ? "Acabados declarados: " + inputs.finishes : ""
+  ].filter(Boolean).join(". ");
+  const system =
+    "Eres un tasador inmobiliario peruano experto en inspección visual de inmuebles. " +
+    "Analiza exclusivamente evidencias visibles en fotografías; no inventes atributos, medidas, ubicación, daños ocultos ni condición estructural. " +
+    "El factor debe ser muy conservador: úsalo solo por estado visible y acabados frente a lo declarado; 1 significa sin ajuste. " +
+    "Responde SOLO JSON válido: " +
+    '{"factor":0.92-1.08,"condition":"excelente|bueno|regular|renovar","finishes":"premium|intermedio|basico","observaciones":"texto breve","rationale":"motivo breve del ajuste"}';
+  const user =
+    "Contexto de la propiedad: " + context + "\n" +
+    "Revisa las fotos. Devuelve factor entre 0.92 y 1.08, con 1.00 si no hay evidencia suficiente. " +
+    "Un factor positivo solo corresponde a acabados o conservación claramente superiores; uno negativo a desgaste, deterioro o acabados claramente inferiores. " +
+    "Las observaciones deben describir únicamente lo visible y el motivo debe explicar el factor.";
+  const content = [{ type: "text", text: user }];
+  images.slice(0, 4).forEach((u) => content.push({ type: "image_url", image_url: { url: u } }));
+  const payload = {
+    model: VISION_MODEL,
+    max_tokens: 900,
+    temperature: 0.1,
+    messages: [{ role: "system", content: system }, { role: "user", content: content }]
+  };
+  if (isGroq) {
+    payload.reasoning_effort = "none";
+    payload.response_format = { type: "json_object" };
+  }
+  const data = await post(payload);
+  const msg = data.choices && data.choices[0] && data.choices[0].message
+    ? data.choices[0].message.content : null;
+  const parsed = extractJson(msg);
+  if (!parsed) throw new Error("No se pudo interpretar la respuesta de visión");
+  return parsed;
+}
+
+async function analyzeValuationPhotos(loc, images, inputs) {
+  if (!API_KEY) return { enabled: false, used: false, factor: 1, reason: "Clave de IA no configurada en el servidor" };
+  if (!images || !images.length) return { enabled: false, used: false, factor: 1, reason: "No se recibieron fotografías" };
+  try {
+    return buildValuationAnalysis(await inferValuationVision(loc, images.slice(0, 4), inputs || {}));
+  } catch (e) {
+    return { enabled: false, used: false, factor: 1, reason: e.message || "La IA de visión no respondió" };
+  }
+}
+
+module.exports = { analyzePhotos, analyzeValuationPhotos };

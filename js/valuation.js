@@ -396,7 +396,7 @@ function isLimaZone(location) {
   return false;
 }
 
-function computeValuation(location, inputs, market, envProfile, descAdj) {
+function computeValuation(location, inputs, market, envProfile, descAdj, photoAdj) {
   const base = resolveBasePrice(location, market);
   const envRaw = envProfile && envProfile.environmentFactor ? envProfile.environmentFactor : 1;
   const envFactor = 1 + (envRaw - 1) * 0.5;
@@ -405,6 +405,9 @@ function computeValuation(location, inputs, market, envProfile, descAdj) {
   const landRatio = landRatioFor(base.base);
   const descFactor = descAdj && descAdj.used && descAdj.factor != null
     ? clamp(descAdj.factor, 0.85, 1.15)
+    : 1;
+  const photoFactor = photoAdj && photoAdj.used && photoAdj.factor != null
+    ? clamp(photoAdj.factor, 0.92, 1.08)
     : 1;
 
   const type = inputs.type || "departamento";
@@ -415,7 +418,7 @@ function computeValuation(location, inputs, market, envProfile, descAdj) {
   else calc = calcGeneric(inputs, envFactor, type, refArea);
 
   const effectivePerM2 = base.base * calc.factor;
-  const total = effectivePerM2 * calc.area * descFactor;
+  const total = effectivePerM2 * calc.area * descFactor * photoFactor;
   const rangeLow = total * 0.92;
   const rangeHigh = total * 1.08;
   const realization = total * 0.8;
@@ -439,6 +442,14 @@ function computeValuation(location, inputs, market, envProfile, descAdj) {
       pct: (descFactor - 1) * 100
     });
   }
+  if (photoFactor !== 1 && photoAdj && photoAdj.used) {
+    factors.push({
+      key: "fotos",
+      label: "Estado visible y acabados (IA con fotos)",
+      factor: photoFactor,
+      pct: (photoFactor - 1) * 100
+    });
+  }
 
   return {
     basePerM2: base.base,
@@ -458,6 +469,7 @@ function computeValuation(location, inputs, market, envProfile, descAdj) {
     zoneLabel: base.label,
     envFactor: envFactor,
     descFactor: descFactor,
+    photoFactor: photoFactor,
     market: market
   };
 }

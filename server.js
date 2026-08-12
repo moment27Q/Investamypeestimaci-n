@@ -28,7 +28,7 @@ try {
 const { getEnvironmentProfile } = require("./environment");
 const { getDescriptionAdjustment } = require("./descripcion");
 const { getAdvisory } = require("./asesor");
-const { analyzePhotos } = require("./vision");
+const { analyzePhotos, analyzeValuationPhotos } = require("./vision");
 const geocoder = require("./geocoder");
 
 const ROOT = __dirname;
@@ -330,7 +330,9 @@ const server = http.createServer((req, res) => {
         .filter((u) => typeof u === "string" && u.startsWith("data:image/"))
         .slice(0, 4);
       try {
-        const data = await analyzePhotos(loc, images);
+        const data = payload.mode === "valuation"
+          ? await analyzeValuationPhotos(loc, images, payload.inputs || {})
+          : await analyzePhotos(loc, images);
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
           "Cache-Control": "no-store"
