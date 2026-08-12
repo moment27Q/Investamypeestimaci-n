@@ -43,6 +43,17 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "https://investamype.com",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization"
+  };
+  Object.entries(corsHeaders).forEach(([key, value]) => res.setHeader(key, value));
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
   const parsed = url.parse(req.url, true);
 
   if (parsed.pathname === "/healthz") {

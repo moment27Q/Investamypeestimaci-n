@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Informe de Tasación</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="informe-page">
+
+  <div class="informe-bar" id="informeBar">
+    <button type="button" class="ib-btn" id="btnBack">← Volver</button>
+    <span class="informe-bar-title">Informe de Tasación · Reglamento Nacional de Tasaciones del Perú</span>
+    <button type="button" class="ib-btn primary" id="btnDocx">Descargar Word (.docx)</button>
+    <button type="button" class="ib-btn primary" id="btnPrint">Imprimir / Guardar PDF</button>
+  </div>
+
+  <div class="informe-error hidden" id="informeError">
+    <div class="empty-state">
+      <div class="empty-ic">◧</div>
+      <p>No hay una tasación reciente para generar el informe.</p>
+      <button type="button" class="ib-btn primary" id="btnErrorBack">Volver al tasador</button>
+    </div>
+  </div>
+
+  <div class="informe-sheet" id="informeSheet">
+    <div class="informe-meta-print">
+      Informe generado con TASADOR PERÚ · Los campos subrayados se completan en pantalla o a mano antes de firmar.
+    </div>
+    <div id="report"></div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/valuation.js"></script>
+  <script src="js/docx.js"></script>
+  <script src="js/informe.js"></script>
+</body>
+</html>

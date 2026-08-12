@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proyectos nuevos en venta — Tasador Perú</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html" class="brand-link">
+        <span class="logo">◧</span>
+        <div>
+          <h1>Tasador <span>Perú</span></h1>
+          <p>Tasación automática en tiempo real</p>
+        </div>
+      </a>
+    </div>
+    <div class="topbar-meta">
+      <span class="badge-live"><i></i> EN VIVO</span>
+      <span class="badge-data">Proyectos: Nexo Inmobiliario</span>
+      <a class="badge-link" href="maximiza.html">Maximiza tu propiedad ↗</a>
+      <a class="badge-link" href="tasador.html">← Volver al tasador</a>
+    </div>
+  </header>
+
+  <main class="projects-layout">
+
+    <div class="card">
+      <div class="card-head">
+        <span class="step">↗</span>
+        <div>
+          <h2>Proyectos nuevos en venta</h2>
+          <p>Departamentos en planos, en construcción y entrega inmediata publicados en Nexo Inmobiliario (CODIP).</p>
+        </div>
+      </div>
+
+      <div class="search-row">
+        <div class="autocomplete">
+          <svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+          <input type="text" id="addressInput" placeholder="Ej: Miraflores, Lima" autocomplete="off">
+          <div id="suggestions" class="suggestions hidden"></div>
+        </div>
+      </div>
+
+      <div class="examples">
+        <span>Probar:</span>
+        <button class="chip" data-ex="Miraflores, Lima">Miraflores</button>
+        <button class="chip" data-ex="San Isidro, Lima">San Isidro</button>
+        <button class="chip" data-ex="Cercado de Lima">Cercado de Lima</button>
+        <button class="chip" data-ex="Arequipa">Arequipa</button>
+        <button class="chip" data-ex="Trujillo">Trujillo</button>
+      </div>
+    </div>
+
+    <div class="compare-panel" id="comparePanel"></div>
+
+    <div class="projects-status hidden" id="projectsStatus"></div>
+
+    <div class="projects-grid" id="projectsGrid"></div>
+
+  </main>
+
+  <footer class="footer">
+    <span>Proyectos nuevos: Nexo Inmobiliario (nexoinmobiliario.pe) · Geocodificación: OpenStreetMap (Nominatim).</span>
+  </footer>
+
+  <div class="modal-overlay hidden" id="listingModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="lmSource">Nexo Inmobiliario · proyecto nuevo</h3>
+        <button type="button" class="modal-close" id="lmClose" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal-body" id="lmBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="compareModal">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <h3>Comparación · Tu propiedad vs. Proyecto</h3>
+        <button type="button" class="modal-close" id="cmpClose" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal-body" id="cmpBody"></div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/valuation.js"></script>
+  <script src="js/geocode.js"></script>
+  <script src="js/proyectos.js"></script>
+</body>
+</html>
