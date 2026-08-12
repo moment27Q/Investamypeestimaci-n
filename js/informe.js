@@ -298,8 +298,8 @@
     var loc = snap.location || {};
     var inputs = snap.inputs || {};
     var env = snap.envProfile;
-    var r = computeValuation(loc, inputs, snap.market, env);
-    var rent = computeRent(loc, inputs, snap.rentMarket, env);
+    var r = computeValuation(loc, inputs, snap.market, env, snap.descAdj);
+    var rent = computeRent(loc, inputs, snap.rentMarket, env, snap.descAdj);
     var type = inputs.type || "departamento";
     var district = loc.district || loc.city || "—";
     var state = loc.state || "";

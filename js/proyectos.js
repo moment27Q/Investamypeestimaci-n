@@ -32,8 +32,8 @@
     try { snap = JSON.parse(raw); } catch (e) { snap = null; }
     if (!snap || !snap.location || !snap.inputs) return;
     try {
-      const r = computeValuation(snap.location, snap.inputs, snap.market, snap.envProfile);
-      const rent = computeRent(snap.location, snap.inputs, snap.rentMarket, snap.envProfile);
+      const r = computeValuation(snap.location, snap.inputs, snap.market, snap.envProfile, snap.descAdj);
+      const rent = computeRent(snap.location, snap.inputs, snap.rentMarket, snap.envProfile, snap.descAdj);
       myProp = {
         location: snap.location,
         inputs: snap.inputs,

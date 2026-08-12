@@ -423,12 +423,13 @@ html { scroll-behavior: smooth; }
 input[type="range"] {
   width: 100%; accent-color: var(--accent); cursor: pointer;
 }
-input[type="number"], select {
+input[type="number"], select, textarea {
   width: 100%; padding: 10px 12px;
   border: 1.5px solid var(--line); border-radius: 9px;
   font-size: 14px; background: #fff; outline: none;
+  font-family: inherit; resize: vertical;
 }
-input[type="number"]:focus, select:focus { border-color: var(--accent); }
+input[type="number"]:focus, select:focus, textarea:focus { border-color: var(--accent); }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 
 .type-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
@@ -747,6 +748,14 @@ body.no-scroll { overflow: hidden; }
   letter-spacing: 0.4px; color: var(--ink-soft); margin-bottom: 3px;
 }
 .env-why { margin: 10px 0 0; font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; }
+
+/* ---------- Nota de IA (descripción libre) ---------- */
+.desc-note {
+  margin-top: 14px; background: #eef7f2; border: 1px solid #cfe6da;
+  border-radius: 10px; padding: 10px 14px;
+  font-size: 12px; color: #1d5a34; line-height: 1.5;
+}
+.desc-note b { color: #155e2e; }
 
 .empty-state { text-align: center; padding: 30px 10px; color: var(--ink-soft); }
 .empty-ic { font-size: 40px; color: #cfd8e6; }

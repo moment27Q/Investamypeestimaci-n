@@ -329,6 +329,14 @@
           </div>
         </div>
 
+        <div class="field">
+          <label>Detalles extra (opcional)</label>
+          <textarea id="descripcion" rows="3" maxlength="2000"
+            placeholder="Ej: remodelado integral en 2023, vista al mar, cerca del parque, cocina con isla, seguridad 24h, cochera techada, patio posterior…"></textarea>
+          <p class="field-help">La IA lee tu descripción y ajusta la tasación solo si encuentra datos que agreguen
+            valor y no estén ya en el formulario. Si no aporta nada, el ajuste se omite.</p>
+        </div>
+
         <div class="tasar-row">
           <button type="button" class="tasar-btn" id="tasarBtn">Tasar</button>
           <p class="tasar-help">Revisa la ubicación y las características, luego presiona <b>Tasar</b> para calcular la tasación estimada.</p>
@@ -417,6 +425,8 @@
             </div>
             <p class="env-why" id="envWhy"></p>
           </div>
+
+          <div class="desc-note hidden" id="descNote"></div>
 
           <div class="legal hidden" id="legalPanel">
             <div class="legal-head">

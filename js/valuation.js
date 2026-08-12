@@ -396,13 +396,16 @@ function isLimaZone(location) {
   return false;
 }
 
-function computeValuation(location, inputs, market, envProfile) {
+function computeValuation(location, inputs, market, envProfile, descAdj) {
   const base = resolveBasePrice(location, market);
   const envRaw = envProfile && envProfile.environmentFactor ? envProfile.environmentFactor : 1;
   const envFactor = 1 + (envRaw - 1) * 0.5;
   const hasMarket = market && market.count >= 3 && market.medianPerM2;
   const refArea = hasMarket && market.medianArea ? market.medianArea : null;
   const landRatio = landRatioFor(base.base);
+  const descFactor = descAdj && descAdj.used && descAdj.factor != null
+    ? clamp(descAdj.factor, 0.85, 1.15)
+    : 1;
 
   const type = inputs.type || "departamento";
   let calc;
@@ -412,7 +415,7 @@ function computeValuation(location, inputs, market, envProfile) {
   else calc = calcGeneric(inputs, envFactor, type, refArea);
 
   const effectivePerM2 = base.base * calc.factor;
-  const total = effectivePerM2 * calc.area;
+  const total = effectivePerM2 * calc.area * descFactor;
   const rangeLow = total * 0.92;
   const rangeHigh = total * 1.08;
   const realization = total * 0.8;
@@ -427,6 +430,15 @@ function computeValuation(location, inputs, market, envProfile) {
       pct: null
     }
   ].concat(calc.rows);
+
+  if (descFactor !== 1 && descAdj && descAdj.used) {
+    factors.push({
+      key: "descripcion",
+      label: "Descripción con IA",
+      factor: descFactor,
+      pct: (descFactor - 1) * 100
+    });
+  }
 
   return {
     basePerM2: base.base,
@@ -445,6 +457,7 @@ function computeValuation(location, inputs, market, envProfile) {
     confidenceMsg: base.msg,
     zoneLabel: base.label,
     envFactor: envFactor,
+    descFactor: descFactor,
     market: market
   };
 }
@@ -466,10 +479,13 @@ function blendRentMarket(staticRentM2, rentMarket) {
   return 0.7 * median + 0.3 * staticRentM2;
 }
 
-function computeRent(location, inputs, rentMarket, envProfile) {
+function computeRent(location, inputs, rentMarket, envProfile, descAdj) {
   const base = resolveBasePrice(location, null);
   const staticRentM2 = rentBaseFromPrice(base.base);
   const hasMarket = rentMarket && rentMarket.count >= 2 && rentMarket.medianRentPerM2;
+  const descFactor = descAdj && descAdj.used && descAdj.factor != null
+    ? clamp(descAdj.factor, 0.85, 1.15)
+    : 1;
 
   let rentBaseM2 = staticRentM2;
   if (hasMarket) rentBaseM2 = blendRentMarket(staticRentM2, rentMarket);
@@ -490,7 +506,7 @@ function computeRent(location, inputs, rentMarket, envProfile) {
   // Los ajustes hedónicos pesan menos en alquiler que en venta (suavizados).
   const rentFactor = 1 + (calc.factor - 1) * 0.7;
   const effectiveRentPerM2 = rentBaseM2 * rentFactor;
-  const monthly = effectiveRentPerM2 * calc.area;
+  const monthly = effectiveRentPerM2 * calc.area * descFactor;
   const rangeLow = monthly * 0.9;
   const rangeHigh = monthly * 1.1;
 
@@ -508,6 +524,7 @@ function computeRent(location, inputs, rentMarket, envProfile) {
     hasMarket: hasMarket,
     count: hasMarket ? rentMarket.count : 0,
     zoneLabel: base.label,
+    descFactor: descFactor,
     market: rentMarket
   };
 }

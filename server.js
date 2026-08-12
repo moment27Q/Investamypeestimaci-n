@@ -26,6 +26,7 @@ try {
 }
 
 const { getEnvironmentProfile } = require("./environment");
+const { getDescriptionAdjustment } = require("./descripcion");
 const { getAdvisory } = require("./asesor");
 const { analyzePhotos } = require("./vision");
 const geocoder = require("./geocoder");
@@ -338,6 +339,43 @@ const server = http.createServer((req, res) => {
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ enabled: false, reason: e.message }));
+      }
+    });
+    return;
+  }
+
+  if (req.method === "POST" && parsed.pathname === "/api/descripcion") {
+    let body = "";
+    req.on("data", (d) => {
+      body += d;
+      if (body.length > 200000) req.destroy();
+    });
+    req.on("end", async () => {
+      let payload = {};
+      try {
+        payload = JSON.parse(body || "{}");
+      } catch (e) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ enabled: false, used: false, factor: 1, reason: "JSON inválido" }));
+        return;
+      }
+      const ctx = {
+        district: payload.district || null,
+        city: payload.city || null,
+        type: payload.type || "departamento",
+        inputs: payload.inputs || {},
+        description: String(payload.description || "").slice(0, 2000)
+      };
+      try {
+        const data = await getDescriptionAdjustment(ctx);
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store"
+        });
+        res.end(JSON.stringify(data));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ enabled: false, used: false, factor: 1, reason: e.message }));
       }
     });
     return;

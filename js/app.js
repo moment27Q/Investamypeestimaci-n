@@ -95,7 +95,9 @@
     apBody: $("apBody"),
     apClose: $("apClose"),
     tasarBtn: $("tasarBtn"),
-    resultCard: $("resultCard")
+    resultCard: $("resultCard"),
+    descripcion: $("descripcion"),
+    descNote: $("descNote")
   };
 
   const state = {
@@ -112,7 +114,9 @@
     envProfile: null,
     areaTouched: false,
     zoneTouched: false,
-    tasado: false
+    tasado: false,
+    descAdj: null,
+    descSeq: 0
   };
 
   const fmt = (n) => Math.round(n).toLocaleString("es-PE");
@@ -253,8 +257,10 @@
     state.market = null;
     state.rentMarket = null;
     state.envProfile = null;
+    state.descAdj = null;
     state.marketSeq++;
     state.rentSeq++;
+    state.descSeq++;
     envSeq++;
     const priceBlock = document.querySelector(".price-block");
     const empty = document.querySelector(".empty-state");
@@ -266,6 +272,7 @@
     els.rentalPanel.classList.add("hidden");
     els.marketPanel.classList.add("hidden");
     els.envPanel.classList.add("hidden");
+    els.descNote.classList.add("hidden");
   }
 
   function runValuation() {
@@ -280,6 +287,7 @@
     fetchMarket();
     fetchRentals();
     fetchEnvironment();
+    fetchDescription();
     saveSnapshot();
     if (els.resultCard) els.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
@@ -298,6 +306,7 @@
         market: state.market,
         rentMarket: state.rentMarket,
         envProfile: state.envProfile,
+        descAdj: state.descAdj,
         generatedAt: new Date().toISOString()
       }));
     } catch (e) { /* almacenamiento no disponible; se ignora */ }
@@ -638,7 +647,7 @@
   function recompute() {
     if (!state.tasado || !state.location) return;
     const inputs = readInputs();
-    const r = computeValuation(state.location, inputs, state.market, state.envProfile);
+    const r = computeValuation(state.location, inputs, state.market, state.envProfile, state.descAdj);
 
     const priceBlock = document.querySelector(".price-block");
     const empty = document.querySelector(".empty-state");
@@ -693,7 +702,7 @@
     });
 
     // Alquiler mensual estimado
-    const rent = computeRent(state.location, inputs, state.rentMarket, state.envProfile);
+    const rent = computeRent(state.location, inputs, state.rentMarket, state.envProfile, state.descAdj);
     els.rentalPanel.classList.remove("hidden");
     els.rentalPrice.textContent = "S/ " + fmt(rent.monthly);
     els.rentalUSD.textContent = "≈ USD " + fmtUSD(rent.monthlyUSD);
@@ -702,6 +711,18 @@
     if (!rent.hasMarket && !state.rentFetching && !els.rentalBadge.classList.contains("loading")) {
       els.rentalBadge.textContent = "Base estática";
       els.rentalBadge.className = "rental-badge empty";
+    }
+
+    // Nota de la IA por descripción (solo si aportó un ajuste)
+    if (state.descAdj && state.descAdj.used) {
+      const pct = (state.descAdj.factor - 1) * 100;
+      const sign = pct > 0 ? "+" : "";
+      els.descNote.classList.remove("hidden");
+      els.descNote.innerHTML =
+        "<b>IA</b> leyó tu descripción y ajustó el valor " + sign + pct.toFixed(1) + "%: " +
+        esc(state.descAdj.rationale || state.descAdj.summary || "");
+    } else {
+      els.descNote.classList.add("hidden");
     }
     saveSnapshot();
   }
@@ -977,7 +998,7 @@
       bedrooms: l.bedrooms != null ? l.bedrooms : current.bedrooms,
       bathrooms: l.bathrooms != null ? l.bathrooms : current.bathrooms
     };
-    const r = computeRent(state.location, inputs, state.rentMarket, state.envProfile);
+    const r = computeRent(state.location, inputs, state.rentMarket, state.envProfile, state.descAdj);
     renderRentModal(l, r);
 
     if (l.url) {
@@ -1076,7 +1097,7 @@
       bedrooms: l.bedrooms != null ? l.bedrooms : current.bedrooms,
       bathrooms: l.bathrooms != null ? l.bathrooms : current.bathrooms
     };
-    const r = computeValuation(state.location, inputs, state.market, state.envProfile);
+    const r = computeValuation(state.location, inputs, state.market, state.envProfile, state.descAdj);
     renderListingModal(l, r);
 
     if (l.url) {
@@ -1225,6 +1246,61 @@
       state.envProfile = null;
       els.envPanel.classList.add("hidden");
     }
+  }
+
+  /* ---------------- Descripción libre (IA) ---------------- */
+  async function fetchDescription() {
+    const loc = state.location;
+    if (!loc) return;
+    const desc = (els.descripcion && els.descripcion.value || "").trim();
+    const seq = ++state.descSeq;
+    if (desc.length < 15) {
+      state.descAdj = null;
+      els.descNote.classList.add("hidden");
+      recompute();
+      return;
+    }
+    const inputs = readInputs();
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 40000);
+      let res;
+      try {
+        res = await fetch("/api/descripcion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: ctrl.signal,
+          body: JSON.stringify({
+            district: loc.district || "",
+            city: loc.city || "",
+            type: inputs.type,
+            inputs: inputs,
+            description: desc
+          })
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      const data = await res.json().catch(() => ({}));
+      if (seq !== state.descSeq || !state.location) return;
+      state.descAdj = data && data.used ? data : null;
+      recompute();
+    } catch (e) {
+      if (seq !== state.descSeq) return;
+      state.descAdj = null;
+      els.descNote.classList.add("hidden");
+      recompute();
+    }
+  }
+
+  let descDebounce = null;
+  if (els.descripcion) {
+    els.descripcion.addEventListener("input", () => {
+      clearTimeout(descDebounce);
+      descDebounce = setTimeout(() => {
+        if (state.tasado) fetchDescription();
+      }, 800);
+    });
   }
 
   function renderEnvironment(env) {
