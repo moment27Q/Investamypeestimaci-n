@@ -88,7 +88,14 @@
     envFactorVal: $("envFactorVal"),
     envWhy: $("envWhy"),
     legalPanel: $("legalPanel"),
-    legalBtn: $("legalBtn")
+    legalBtn: $("legalBtn"),
+    appraiserBtn: $("appraiserBtn"),
+    compareBtn: $("compareBtn"),
+    appraiserModal: $("appraiserModal"),
+    apBody: $("apBody"),
+    apClose: $("apClose"),
+    tasarBtn: $("tasarBtn"),
+    resultCard: $("resultCard")
   };
 
   const state = {
@@ -104,7 +111,8 @@
     rentRest: [],
     envProfile: null,
     areaTouched: false,
-    zoneTouched: false
+    zoneTouched: false,
+    tasado: false
   };
 
   const fmt = (n) => Math.round(n).toLocaleString("es-PE");
@@ -215,12 +223,9 @@
     const { pretty } = placeLabel(place);
     const zone = loc.district || loc.city || "zona detectada";
     els.zoneLabel.textContent = zone + " · " + pretty;
-    els.mapStatus.textContent = pretty;
+    els.mapStatus.textContent = pretty + " · presiona Tasar para calcular";
     els.mapStatus.classList.remove("hidden");
-    recompute();
-    fetchMarket();
-    fetchRentals();
-    fetchEnvironment();
+    resetResults();
   }
 
   async function applyReverse(lat, lon) {
@@ -233,15 +238,69 @@
       state.zoneTouched = false;
       const { pretty } = placeLabel(place);
       els.zoneLabel.textContent = (loc.district || loc.city || "zona detectada") + " · " + pretty;
-      els.mapStatus.textContent = pretty;
+      els.mapStatus.textContent = pretty + " · presiona Tasar para calcular";
       els.mapStatus.classList.remove("hidden");
-      recompute();
-      fetchMarket();
-      fetchRentals();
-      fetchEnvironment();
+      resetResults();
     } catch (e) {
       showStatus("No se pudo geocodificar ese punto.");
     }
+  }
+
+  /* ---------------- Botón Tasar ---------------- */
+  function resetResults() {
+    state.tasado = false;
+    state.lastTotal = 0;
+    state.market = null;
+    state.rentMarket = null;
+    state.envProfile = null;
+    state.marketSeq++;
+    state.rentSeq++;
+    envSeq++;
+    const priceBlock = document.querySelector(".price-block");
+    const empty = document.querySelector(".empty-state");
+    if (priceBlock) priceBlock.classList.add("hidden");
+    if (empty) empty.classList.remove("hidden");
+    els.legalPanel.classList.add("hidden");
+    els.confidence.classList.add("hidden");
+    els.breakdown.classList.add("hidden");
+    els.rentalPanel.classList.add("hidden");
+    els.marketPanel.classList.add("hidden");
+    els.envPanel.classList.add("hidden");
+  }
+
+  function runValuation() {
+    if (!state.location) {
+      showStatus("Primero ingresa la ubicación de la propiedad.");
+      const firstCard = document.querySelector(".col-main .card");
+      if (firstCard) firstCard.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    state.tasado = true;
+    recompute();
+    fetchMarket();
+    fetchRentals();
+    fetchEnvironment();
+    saveSnapshot();
+    if (els.resultCard) els.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  els.tasarBtn.addEventListener("click", runValuation);
+
+  /* Guarda la tasación actual para compararla con proyectos nuevos (proyectos.html) */
+  function saveSnapshot() {
+    const loc = state.location;
+    if (!loc || !state.tasado) return;
+    try {
+      sessionStorage.setItem("informeSnapshot", JSON.stringify({
+        version: 1,
+        location: loc,
+        inputs: readInputs(),
+        market: state.market,
+        rentMarket: state.rentMarket,
+        envProfile: state.envProfile,
+        generatedAt: new Date().toISOString()
+      }));
+    } catch (e) { /* almacenamiento no disponible; se ignora */ }
   }
 
   map.on("click", (e) => {
@@ -277,10 +336,12 @@
       document.querySelectorAll(".type-btn").forEach((x) => x.classList.remove("active"));
       b.classList.add("active");
       renderFields();
-      recompute();
-      fetchMarket();
-      fetchRentals();
-      fetchEnvironment();
+      if (state.tasado) {
+        recompute();
+        fetchMarket();
+        fetchRentals();
+        fetchEnvironment();
+      }
     });
   });
 
@@ -396,27 +457,142 @@
 
   /* ---------------- Informe de tasación legal ---------------- */
   function openLegalReport() {
-    const loc = state.location;
-    if (!loc) return;
-    const snapshot = {
-      version: 1,
-      location: loc,
-      inputs: readInputs(),
-      market: state.market,
-      rentMarket: state.rentMarket,
-      envProfile: state.envProfile,
-      generatedAt: new Date().toISOString()
-    };
-    try {
-      sessionStorage.setItem("informeSnapshot", JSON.stringify(snapshot));
-    } catch (e) {
-      showStatus("No se pudo abrir el informe de tasación.");
-      return;
-    }
+    if (!state.location) return;
+    saveSnapshot();
     window.location.href = "informe.html";
   }
 
   els.legalBtn.addEventListener("click", openLegalReport);
+
+  /* ---------------- Comparar con proyectos nuevos ---------------- */
+  els.compareBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    saveSnapshot();
+    goNexoPage();
+  });
+
+  /* ---------------- Tasador profesional (planes de servicio) ---------------- */
+  const APPRAISER_WHATSAPP = "51999000301";
+
+  const APPRAISER_PLANS = [
+    {
+      key: "rnt",
+      name: "Informe RNT completo",
+      price: 450,
+      badge: "Virtual",
+      time: "Entrega 5 días hábiles",
+      desc: "Inspección virtual + informe formal según D.S. N° 013-2002-VIVIENDA, firmado por tasador colegiado. Válido para trámites y referencia bancaria.",
+      extra: ["Informe RNT completo y firmado", "Fotografías y croquis de ubicación", "Válido para bancos y notarías"]
+    },
+    {
+      key: "visita",
+      name: "Tasación con visita",
+      price: 890,
+      badge: "Más pedido",
+      time: "Entrega 4 días hábiles",
+      desc: "Visita técnica del tasador al inmueble, medición real y verificación de acabados. Informe RNT + certificado de tasación.",
+      extra: ["Visita técnica al inmueble", "Medición y verificación de acabados", "Informe RNT + certificado de tasación"]
+    },
+    {
+      key: "urgente",
+      name: "Tasación urgente",
+      price: 1290,
+      badge: "24–48 h",
+      time: "Entrega 24–48 horas",
+      desc: "Prioridad total para casos con plazo: venta, herencia, división y partición o trámite notarial. Todo incluido, con soporte hasta la entrega.",
+      extra: ["Todo lo del plan Visita", "Prioridad 24–48 h", "Soporte y consultas hasta la entrega"]
+    }
+  ];
+
+  function appraiserPlanCard(p) {
+    return (
+      '<div class="ap-card" data-plan="' + esc(p.key) + '">' +
+        '<div class="ap-badge">' + esc(p.badge) + '</div>' +
+        '<h4>' + esc(p.name) + '</h4>' +
+        '<div class="ap-price">S/ ' + p.price.toLocaleString("es-PE") + '</div>' +
+        '<p>' + esc(p.desc) + '</p>' +
+        '<ul>' + p.extra.map((x) => "<li>" + esc(x) + "</li>").join("") + '</ul>' +
+        '<div class="ap-time">' + esc(p.time) + '</div>' +
+        '<button type="button" class="ap-select" data-plan="' + esc(p.key) + '">Solicitar este plan</button>' +
+      '</div>'
+    );
+  }
+
+  function openAppraiserPlan() {
+    const loc = state.location;
+    const addr = (loc && (loc.display || loc.address)) ? esc(loc.display || loc.address) : "";
+    const snap = addr
+      ? '<div class="ap-snap"><b>📋 Tu inmueble a tasar</b><span>' + addr + "</span>" +
+        (state.lastTotal ? "<span>Valor referencial estimado: S/ " + fmt(state.lastTotal) + "</span>" : "") +
+        "</div>"
+      : "";
+    els.apBody.innerHTML =
+      '<p class="ap-intro">Tasadores colegiados con experiencia en valorizaciones para bancos, notarías, herencias y trámites legales.</p>' +
+      '<div class="ap-plans">' + APPRAISER_PLANS.map(appraiserPlanCard).join("") + "</div>" +
+      snap +
+      '<form id="apForm" class="ap-form">' +
+        "<h4>Solicitar tasación profesional</h4>" +
+        '<label>Nombre completo<input type="text" id="apName" placeholder="Ej. Juan Pérez" required></label>' +
+        '<label>Celular / WhatsApp<input type="tel" id="apPhone" placeholder="Ej. 999 888 777" required></label>' +
+        '<label>Departamento / provincia<input type="text" id="apCity" placeholder="Ej. Lima" value="Lima"></label>' +
+        '<label>Dirección del inmueble<input type="text" id="apAddress" placeholder="Ej. Av. Larco 1234, Miraflores" value="' + addr + '"></label>' +
+        '<label>Plan elegido<select id="apPlan">' +
+          APPRAISER_PLANS.map((p) => '<option value="' + esc(p.key) + '">' + esc(p.name) + " — S/ " + p.price.toLocaleString("es-PE") + "</option>").join("") +
+        "</select></label>" +
+        '<button type="submit" class="ap-submit">Enviar solicitud por WhatsApp</button>' +
+        '<p class="ap-note">Al enviar se abre WhatsApp con tu solicitud armada; un tasador te confirmará el costo y la fecha de la visita.</p>' +
+      "</form>";
+    selectAppraiserPlan(APPRAISER_PLANS[0].key);
+    els.appraiserModal.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
+  }
+
+  function selectAppraiserPlan(key) {
+    const cards = els.apBody.querySelectorAll(".ap-card");
+    cards.forEach((c) => c.classList.toggle("ap-active", c.dataset.plan === key));
+    const sel = els.apBody.querySelector("#apPlan");
+    if (sel) sel.value = key;
+  }
+
+  function closeAppraiserPlan() {
+    els.appraiserModal.classList.add("hidden");
+    document.body.classList.remove("no-scroll");
+  }
+
+  els.appraiserBtn.addEventListener("click", openAppraiserPlan);
+  els.apClose.addEventListener("click", closeAppraiserPlan);
+  els.appraiserModal.addEventListener("click", (e) => {
+    if (e.target === els.appraiserModal) closeAppraiserPlan();
+  });
+  els.apBody.addEventListener("click", (e) => {
+    const t = e.target.closest(".ap-card, .ap-select");
+    if (t) selectAppraiserPlan(t.dataset.plan);
+  });
+  els.apBody.addEventListener("change", (e) => {
+    if (e.target.id === "apPlan") selectAppraiserPlan(e.target.value);
+  });
+  els.apBody.addEventListener("submit", (e) => {
+    if (e.target.id !== "apForm") return;
+    e.preventDefault();
+    const val = (id) => (els.apBody.querySelector(id) || {}).value || "";
+    const key = val("#apPlan");
+    const plan = APPRAISER_PLANS.find((p) => p.key === key) || APPRAISER_PLANS[0];
+    const msg =
+      "Hola, quiero solicitar una tasación profesional.\n\n" +
+      "· Plan: " + plan.name + " (S/ " + plan.price + ")\n" +
+      "· Nombre: " + val("#apName") + "\n" +
+      "· Celular: " + val("#apPhone") + "\n" +
+      "· Departamento: " + val("#apCity") + "\n" +
+      "· Dirección: " + val("#apAddress") + "\n" +
+      (state.lastTotal ? "· Valor referencial del tasador: S/ " + fmt(state.lastTotal) + "\n" : "") +
+      "\nPor favor confírmenme el costo final y la fecha de atención. Gracias.";
+    window.open("https://wa.me/" + APPRAISER_WHATSAPP + "?text=" + encodeURIComponent(msg), "_blank");
+    showStatus("Solicitud lista: se abrió WhatsApp para enviar tu mensaje al tasador.");
+    closeAppraiserPlan();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !els.appraiserModal.classList.contains("hidden")) closeAppraiserPlan();
+  });
 
   function readInputs() {
     const active = document.querySelector(".type-btn.active");
@@ -460,7 +636,7 @@
 
   /* ---------------- Cálculo ---------------- */
   function recompute() {
-    if (!state.location) return;
+    if (!state.tasado || !state.location) return;
     const inputs = readInputs();
     const r = computeValuation(state.location, inputs, state.market, state.envProfile);
 
@@ -527,6 +703,7 @@
       els.rentalBadge.textContent = "Base estática";
       els.rentalBadge.className = "rental-badge empty";
     }
+    saveSnapshot();
   }
 
   /* ---------------- Precios de mercado (comparables reales) ---------------- */

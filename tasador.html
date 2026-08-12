@@ -153,6 +153,9 @@
               <option value="normal">Zona residencial estándar</option>
               <option value="periferia">Periférica / en expansión</option>
             </select>
+            <p class="field-help">Ubicación exacta de tu inmueble dentro del distrito. Ajusta el precio por m²:
+              <b>Auto</b> usa la zona del distrito detectado · <b>Premium</b> (frente al mar, exclusiva) +3% ·
+              <b>Céntrica</b> +1,5% · <b>Estándar</b> sin cambio · <b>Periférica</b> −4%.</p>
           </div>
         </div>
 
@@ -325,6 +328,11 @@
             </select>
           </div>
         </div>
+
+        <div class="tasar-row">
+          <button type="button" class="tasar-btn" id="tasarBtn">Tasar</button>
+          <p class="tasar-help">Revisa la ubicación y las características, luego presiona <b>Tasar</b> para calcular la tasación estimada.</p>
+        </div>
       </div>
 
     </section>
@@ -343,7 +351,7 @@
         <div class="result-body" id="resultBody">
           <div class="empty-state">
             <div class="empty-ic">◧</div>
-            <p>Ingresa una dirección o marca un punto en el mapa<br>para calcular el valor en tiempo real.</p>
+            <p>Completa la ubicación y las características de la propiedad,<br>luego presiona <b>Tasar</b> para ver la tasación estimada.</p>
           </div>
 
           <div class="price-block hidden">
@@ -419,6 +427,8 @@
               Tasaciones del Perú (D.S. N° 013-2002-VIVIENDA): identificación, descripción, metodología,
               análisis de mercado, valores y firmas. Listo para imprimir o exportar a Word.</p>
             <button type="button" class="legal-btn" id="legalBtn">Haz tu tasación legal</button>
+            <button type="button" class="legal-btn legal-btn-secondary" id="appraiserBtn">Contactar a un tasador profesional</button>
+            <button type="button" class="legal-btn legal-btn-secondary" id="compareBtn">Comparar con proyectos nuevos ↗</button>
           </div>
 
           <div class="breakdown hidden" id="breakdown">
@@ -455,6 +465,16 @@
         <button type="button" class="modal-close" id="lmClose" aria-label="Cerrar">×</button>
       </div>
       <div class="modal-body" id="lmBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="appraiserModal">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <h3>Solicitar tasación profesional</h3>
+        <button type="button" class="modal-close" id="apClose" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal-body" id="apBody"></div>
     </div>
   </div>
 

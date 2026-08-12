@@ -8,12 +8,74 @@
     listingModal: $("listingModal"),
     lmSource: $("lmSource"),
     lmBody: $("lmBody"),
-    lmClose: $("lmClose")
+    lmClose: $("lmClose"),
+    comparePanel: $("comparePanel"),
+    compareModal: $("compareModal"),
+    cmpBody: $("cmpBody"),
+    cmpClose: $("cmpClose")
   };
 
   const fmt = (n) => Math.round(n).toLocaleString("es-PE");
+  const money = (n) => "S/ " + fmt(n);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const TYPE_LABELS = { departamento: "Departamento", casa: "Casa", terreno: "Terreno", local: "Local comercial", oficina: "Oficina", piso: "Piso" };
+
+  /* ---------------- Propiedad tasada (informeSnapshot) ---------------- */
+  let myProp = null;
+
+  function loadMyProp() {
+    let raw = null;
+    try { raw = sessionStorage.getItem("informeSnapshot"); } catch (e) { raw = null; }
+    if (!raw) return;
+    let snap = null;
+    try { snap = JSON.parse(raw); } catch (e) { snap = null; }
+    if (!snap || !snap.location || !snap.inputs) return;
+    try {
+      const r = computeValuation(snap.location, snap.inputs, snap.market, snap.envProfile);
+      const rent = computeRent(snap.location, snap.inputs, snap.rentMarket, snap.envProfile);
+      myProp = {
+        location: snap.location,
+        inputs: snap.inputs,
+        typeLabel: TYPE_LABELS[snap.inputs.type] || "Inmueble",
+        area: Math.round(r.area || 0),
+        value: Math.round(r.total || 0),
+        perM2: Math.round(r.effectivePerM2 || 0),
+        renta: Math.round(rent.monthly || 0),
+        district: snap.location.district || snap.location.city || "—"
+      };
+    } catch (e) {
+      myProp = null;
+    }
+  }
+
+  loadMyProp();
+
+  function renderComparePanel() {
+    if (!myProp) {
+      els.comparePanel.innerHTML =
+        '<div class="cmp-panel cmp-empty">' +
+          '<span class="cmp-ic">📊</span>' +
+          '<div><b>Compara con tu propiedad tasada</b>' +
+          '<span>Tasa primero tu propiedad para comparar su valor con los proyectos nuevos.</span></div>' +
+          '<a class="cmp-cta" href="tasador.html">Tasar mi propiedad →</a>' +
+        '</div>';
+      return;
+    }
+    els.comparePanel.innerHTML =
+      '<div class="cmp-panel">' +
+        '<span class="cmp-ic">🏠</span>' +
+        '<div class="cmp-mine">' +
+          '<b>Tu propiedad tasada</b>' +
+          '<span class="cmp-mine-sub">' + esc(myProp.typeLabel) + " · " + myProp.area + ' m² · ' + esc(myProp.district) + "</span>" +
+          '<span class="cmp-mine-sub"><b>' + money(myProp.value) + '</b> · S/ ' + fmt(myProp.perM2) +
+            '/m² · Renta S/ ' + fmt(myProp.renta) + '/mes</span>' +
+        '</div>' +
+        '<span class="cmp-hint">Toca <b>Comparar</b> en cualquier proyecto para ver cuál conviene más.</span>' +
+      '</div>';
+  }
+
+  renderComparePanel();
 
   let current = null;
   let seq = 0;
@@ -219,6 +281,14 @@
       }
       actions.appendChild(open);
       actions.appendChild(photos);
+      if (myProp) {
+        const cmp = document.createElement("button");
+        cmp.type = "button";
+        cmp.className = "pc-btn pc-compare";
+        cmp.textContent = "Comparar";
+        cmp.addEventListener("click", () => openCompare(p));
+        actions.appendChild(cmp);
+      }
       body.appendChild(actions);
 
       card.appendChild(media);
@@ -319,4 +389,100 @@
     els.listingModal.classList.add("hidden");
     document.body.classList.remove("no-scroll");
   }
+
+  /* ---------------- Comparación: tu propiedad vs proyecto ---------------- */
+  function projPerM2(p) {
+    if (!p.areaMin) return null;
+    return Math.round(p.priceFrom / p.areaMin);
+  }
+
+  function verdictHtml(p) {
+    const mine = myProp;
+    const pPerM2 = projPerM2(p);
+    if (mine.perM2 <= 0 || !pPerM2) {
+      return '<div class="cmp-verdict neutral"><b>Datos incompletos para un veredicto.</b><span>Completa el área del proyecto o revisa los valores.</span></div>';
+    }
+    const diff = mine.perM2 - pPerM2;
+    const pct = Math.round((diff / pPerM2) * 100);
+
+    if (diff > 0) {
+      return '<div class="cmp-verdict win-mine">' +
+        '<b>Tu propiedad cotiza mejor por m²</b>' +
+        '<span>Su valor es S/ ' + fmt(diff) + '/m² más alto que el proyecto (+' + pct + '%). Si el objetivo es vender, tu propiedad está mejor valorada que estos proyectos nuevos.</span>' +
+        '</div>';
+    }
+    if (diff < 0) {
+      return '<div class="cmp-verdict win-proj">' +
+        '<b>El proyecto es mejor precio por m²</b>' +
+        '<span>Su precio es S/ ' + fmt(Math.abs(diff)) + '/m² menor que el valor de tu propiedad (-' + pct + '%). Si el objetivo es comprar, estos proyectos nuevos ofrecen mejor valor por m².</span>' +
+        '</div>';
+    }
+    return '<div class="cmp-verdict neutral"><b>Valores comparables</b><span>Tu propiedad y el proyecto tienen un valor por m² similar. Decide por ubicación, acabados y plazo de entrega.</span></div>';
+  }
+
+  function compareHtml(p) {
+    const mine = myProp;
+    const pPerM2 = projPerM2(p);
+    const projArea = p.areaMin != null && p.areaMax != null
+      ? p.areaMin + "–" + p.areaMax + " m²"
+      : (p.areaMin != null ? p.areaMin + " m²" : "—");
+    const saldo = mine.value - p.priceFrom;
+    const saldoTxt = saldo >= 0
+      ? 'El valor de tu propiedad (' + money(mine.value) + ') alcanza para el precio inicial del proyecto (' + money(p.priceFrom) + '); te sobrarían <b>S/ ' + fmt(saldo) + '</b>.'
+      : 'Tu propiedad (' + money(mine.value) + ') no cubre el precio inicial del proyecto (' + money(p.priceFrom) + '); faltarían <b>S/ ' + fmt(Math.abs(saldo)) + '</b>.';
+
+    const row = (label, mineV, projV, winner) =>
+      '<tr class="' + (winner ? "cmp-win" : "") + '">' +
+        '<th>' + label + "</th><td>" + mineV + "</td><td>" + projV + "</td></tr>";
+
+    const diff = mine.perM2 > 0 && pPerM2 ? mine.perM2 - pPerM2 : 0;
+    const winMine = diff > 0 ? "mine" : (diff < 0 ? "proj" : null);
+
+    return '<div class="cmp-wrap">' +
+      verdictHtml(p) +
+      '<div class="cmp-grid">' +
+        '<div class="cmp-col cmp-mine-col">' +
+          '<div class="cmp-col-head"><span class="cmp-ic">🏠</span><div><b>Tu propiedad</b><span>' + esc(mine.typeLabel) + " · " + esc(mine.district) + "</span></div></div>" +
+        '</div>' +
+        '<div class="cmp-vs">VS</div>' +
+        '<div class="cmp-col cmp-proj-col">' +
+          '<div class="cmp-col-head"><span class="cmp-ic">🏗️</span><div><b>Proyecto nuevo</b><span>' + esc(p.name) + "</span></div></div>" +
+        '</div>' +
+      '</div>' +
+      '<table class="cmp-table">' +
+        "<tr><th></th><th>Tu propiedad</th><th>Proyecto</th></tr>" +
+        row("Área", mine.area + " m²", projArea) +
+        row("Precio total", money(mine.value), "Desde " + money(p.priceFrom)) +
+        row("Precio por m²", mine.perM2 ? money(mine.perM2) + "/m²" : "—",
+            pPerM2 ? "Desde " + money(pPerM2) + "/m²" : "—", winMine) +
+        row("Renta mensual est.", "S/ " + fmt(mine.renta) + "/mes", "—") +
+        (p.builder ? row("Inmobiliaria", "—", esc(p.builder)) : "") +
+        (p.phase ? row("Etapa", "—", esc(p.phase)) : "") +
+      '</table>' +
+      '<div class="cmp-saldo">' + saldoTxt + "</div>" +
+      (p.url
+        ? '<a class="cmp-open" href="' + esc(p.url) + '" target="_blank" rel="noopener">Ver proyecto en Nexo ↗</a>'
+        : "") +
+    '</div>';
+  }
+
+  function openCompare(p) {
+    if (!myProp) return;
+    els.compareModal.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
+    els.cmpBody.innerHTML = compareHtml(p);
+  }
+
+  function closeCompare() {
+    els.compareModal.classList.add("hidden");
+    document.body.classList.remove("no-scroll");
+  }
+
+  els.cmpClose.addEventListener("click", closeCompare);
+  els.compareModal.addEventListener("click", (e) => {
+    if (e.target === els.compareModal) closeCompare();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !els.compareModal.classList.contains("hidden")) closeCompare();
+  });
 })();
