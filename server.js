@@ -45,7 +45,8 @@ const MIME = {
 const server = http.createServer((req, res) => {
   const allowedOrigins = new Set([
     "https://investamype.com",
-    "https://www.investamype.com"
+    "https://www.investamype.com",
+    "https://tasador.investamype.com"
   ]);
   const requestOrigin = req.headers.origin;
   const corsOrigin = allowedOrigins.has(requestOrigin)
