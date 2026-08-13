@@ -663,6 +663,80 @@
     }).catch(() => {});
   }
 
+  /* ---------- Correo de la tasación al email del usuario ---------- */
+  function getLeadEmail() {
+    const saved = getSavedLead();
+    if (saved && saved.email) return saved.email;
+    if (els.leadEmail && els.leadEmail.value.trim()) return els.leadEmail.value.trim();
+    return null;
+  }
+
+  function buildValuationEmail(r, lead) {
+    const loc = state.location || {};
+    const inputs = readInputs();
+    const e2 = (s) => esc(String(s == null ? "" : s));
+    const rows = (r.factors || []).map((f) =>
+      "<tr>" +
+        "<td style=\"padding:5px 0;color:#4b5563\">" + e2(f.label) + "</td>" +
+        "<td style=\"padding:5px 0;text-align:right;font-weight:600\">" +
+          (f.pct === null ? "S/ " + fmt(r.basePerM2) : "×" + f.factor.toFixed(2) + " (" + (f.pct > 0 ? "+" : "") + f.pct + "%)") +
+        "</td>" +
+      "</tr>"
+    ).join("");
+    const first = lead && lead.name ? String(lead.name).split(" ")[0] : null;
+    return (
+      "<div style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:640px;margin:0 auto\">" +
+        "<div style=\"background:#0f172a;color:#fff;padding:24px 28px;border-radius:10px 10px 0 0\">" +
+          "<div style=\"font-size:20px;font-weight:700\">Tasador Perú</div>" +
+          "<div style=\"font-size:13px;opacity:.8;margin-top:2px\">Tu tasación de propiedad</div>" +
+        "</div>" +
+        "<div style=\"border:1px solid #e5e7eb;border-top:none;padding:28px;border-radius:0 0 10px 10px\">" +
+          "<p>" + (first ? "Hola, " + e2(first) + ":" : "Hola:") + "</p>" +
+          "<p style=\"font-size:14px;margin:0\">Gracias por usar <b>Tasador Perú</b>. Este es el valor estimado de tu propiedad:</p>" +
+          "<div style=\"background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:20px;text-align:center;margin:18px 0\">" +
+            "<div style=\"font-size:12px;color:#166534;text-transform:uppercase;letter-spacing:.05em\">Valor estimado de venta</div>" +
+            "<div style=\"font-size:34px;font-weight:700;color:#15803d;margin-top:6px\">S/ " + fmt(r.total) + "</div>" +
+            "<div style=\"font-size:14px;color:#374151;margin-top:6px\">≈ USD " + fmtUSD(r.totalUSD) + "</div>" +
+            "<div style=\"font-size:13px;color:#6b7280;margin-top:4px\">Rango probable: S/ " + fmt(r.rangeLow) + " — S/ " + fmt(r.rangeHigh) + "</div>" +
+            "<div style=\"font-size:13px;color:#6b7280\">Precio m² efectivo: S/ " + fmt(r.effectivePerM2) + "</div>" +
+          "</div>" +
+          "<table style=\"width:100%;border-collapse:collapse;font-size:13px\">" +
+            "<tr><td style=\"padding:6px 0;color:#6b7280\">Ubicación</td><td style=\"padding:6px 0;text-align:right;font-weight:600\">" + e2(loc.display || loc.address || loc.district || "—") + "</td></tr>" +
+            "<tr><td style=\"padding:6px 0;color:#6b7280\">Tipo de propiedad</td><td style=\"padding:6px 0;text-align:right;font-weight:600\">" + e2(inputs.type) + "</td></tr>" +
+            "<tr><td style=\"padding:6px 0;color:#6b7280\">Área</td><td style=\"padding:6px 0;text-align:right;font-weight:600\">" + e2(inputs.area) + " m²</td></tr>" +
+            "<tr><td style=\"padding:6px 0;color:#6b7280\">Dormitorios / Baños</td><td style=\"padding:6px 0;text-align:right;font-weight:600\">" + e2(inputs.bedrooms) + " / " + e2(inputs.bathrooms) + "</td></tr>" +
+            "<tr><td style=\"padding:6px 0;color:#6b7280\">Antigüedad</td><td style=\"padding:6px 0;text-align:right;font-weight:600\">" + e2(inputs.age) + " años</td></tr>" +
+            "<tr><td style=\"padding:6px 0;color:#6b7280\">Nivel de confianza</td><td style=\"padding:6px 0;text-align:right;font-weight:600\">" + e2(r.confidence) + "</td></tr>" +
+          "</table>" +
+          "<div style=\"font-size:14px;font-weight:600;margin:14px 0 4px\">Desglose de factores</div>" +
+          "<table style=\"width:100%;border-collapse:collapse;font-size:13px\">" + rows + "</table>" +
+          "<p style=\"font-size:12px;color:#9ca3af;margin-top:22px;border-top:1px solid #e5e7eb;padding-top:12px\">Valor estimado con fines orientativos, basado en datos de mercado y en las características declaradas. No constituye una tasación profesional.</p>" +
+        "</div>" +
+      "</div>"
+    );
+  }
+
+  function sendValuationEmail(r) {
+    if (state.emailSent) return;
+    state.emailSent = true;
+    const to = getLeadEmail();
+    if (!to) return;
+    fetch("/api/enviar-tasacion", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to,
+        subject: "Tu tasación de propiedad — Tasador Perú",
+        html: buildValuationEmail(r, getSavedLead())
+      })
+    })
+      .then((res) => res.json().catch(() => null))
+      .then((d) => {
+        if (d && !d.ok) console.warn("No se pudo enviar el correo de la tasación:", d.error);
+      })
+      .catch(() => {});
+  }
+
   function openLeadModal() {
     if (!els.leadModal) { startValuation(); return; }
     const saved = getSavedLead();
@@ -766,6 +840,7 @@
     const runId = ++state.runSeq;
     state.tasado = true;
     state.dirty = false;
+    state.emailSent = false;
     state.market = null;
     state.rentMarket = null;
     state.envProfile = null;
@@ -785,7 +860,8 @@
       if (!state.tasado || runId !== state.runSeq) return;
       setLoading(false);
       revealResults();
-      recompute();
+      const r = recompute();
+      sendValuationEmail(r);
       if (els.resultCard) els.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
   }
@@ -1261,6 +1337,7 @@
       els.propertyPhotoNote.classList.add("hidden");
     }
     saveSnapshot();
+    return r;
   }
 
   async function fetchPropertyPhotos() {

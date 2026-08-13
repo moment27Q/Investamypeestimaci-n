@@ -25,6 +25,27 @@ try {
   console.log("  [aviso] Playwright no está instalado; los precios de mercado quedarán desactivados. Ejecuta: npm install");
 }
 
+let sendMail = null;
+try {
+  const nodemailer = require("nodemailer");
+  sendMail = (to, subject, html) => {
+    const transporter = nodemailer.createTransport({
+      host: process.env.MAIL_HOST || "tasador.investamype.com",
+      port: parseInt(process.env.MAIL_PORT || "465", 10),
+      secure: true,
+      auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS }
+    });
+    return transporter.sendMail({
+      from: (process.env.MAIL_FROM_NAME ? process.env.MAIL_FROM_NAME + " <" : "") + (process.env.MAIL_FROM || process.env.MAIL_USER) + (process.env.MAIL_FROM_NAME ? ">" : ""),
+      to,
+      subject,
+      html
+    });
+  };
+} catch (e) {
+  console.log("  [aviso] nodemailer no disponible; el envío de correos quedará desactivado.");
+}
+
 const { getEnvironmentProfile } = require("./environment");
 const { getDescriptionAdjustment } = require("./descripcion");
 const { getAdvisory } = require("./asesor");
@@ -348,6 +369,46 @@ const server = http.createServer((req, res) => {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Error en análisis de entorno", detail: e.message }));
       });
+    return;
+  }
+
+  if (req.method === "POST" && parsed.pathname === "/api/enviar-tasacion") {
+    let body = "";
+    req.on("data", (d) => {
+      body += d;
+      if (body.length > 300000) req.destroy();
+    });
+    req.on("end", async () => {
+      let payload = {};
+      try {
+        payload = JSON.parse(body || "{}");
+      } catch (e) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "JSON inválido" }));
+        return;
+      }
+      const to = String(payload.to || "").trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "Destinatario inválido" }));
+        return;
+      }
+      if (!sendMail) {
+        res.writeHead(503, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "Envío de correos no disponible (nodemailer)" }));
+        return;
+      }
+      const subject = String(payload.subject || "Tu tasación de propiedad — Tasador Perú").slice(0, 200);
+      const html = String(payload.html || "").slice(0, 200000);
+      try {
+        await sendMail(to, subject, html);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
     return;
   }
 
