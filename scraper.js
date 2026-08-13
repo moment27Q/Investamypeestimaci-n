@@ -10,7 +10,8 @@ const TYPE_SLUG = {
   casa: "casas",
   terreno: "terrenos",
   local: "locales",
-  oficina: "oficinas"
+  oficina: "oficinas",
+  cochera: "cocheras"
 };
 
 let browserPromise = null;
@@ -750,6 +751,195 @@ async function getRentals(query) {
 }
 
 /* ------------------------------------------------------------------ */
+/* COCHERAS / ESTACIONAMIENTO — comparables de cochera suelta          */
+/* ------------------------------------------------------------------ */
+
+function buildCocheraUrls({ district, city }) {
+  const urls = [];
+  const slug = slugify(district || city || "");
+
+  if (district && DATA_DISTRICTS_SET.has(district)) {
+    urls.push({
+      site: "urbania",
+      url: `https://urbania.pe/buscar/venta-de-cocheras-en-${slug}--lima--lima`
+    });
+  }
+  if (slug) {
+    urls.push({
+      site: "adondevivir",
+      url: `https://www.adondevivir.com/cocheras-en-venta-en-${slug}.html`
+    });
+  }
+  return urls;
+}
+
+function parseCocheraCardText(text) {
+  if (!text || text.length > 1400) return null;
+  // Avisos "Desde S/ X, un." de proyectos: no tienen precio único
+  if (/\bdesde\b/i.test(text) && /\bun\.?\b/i.test(text)) return null;
+  // Debe tratarse de una cochera / estacionamiento (no un inmueble completo)
+  if (!/\b(cocher|estacionamiento|parqueo|garage|garaje|parking|playa\s+de\s+estacionamiento|estacionam\.)\b/i.test(text)) return null;
+
+  // Precio en S/ (primera ocurrencia que no sea "Mantenimiento")
+  const re = /S\/\s*([\d.,]+)/g;
+  let price = null;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const tail = text.slice(m.index, m.index + 40);
+    if (/Mantenimiento/i.test(tail)) continue;
+    price = parseFloat(m[1].replace(/\./g, "").replace(/,/g, ""));
+    break;
+  }
+
+  // Precio en USD (puede publicarse solo en dólares)
+  const usdM = text.match(/\b(?:US\$|USD)\s*([\d.,]+)/);
+  if (usdM) {
+    const usd = parseFloat(usdM[1].replace(/\./g, "").replace(/,/g, ""));
+    if (price == null || usd > price * 2) price = usd * USD_FX;
+  }
+  if (price == null) return null;
+
+  if (price < 3000 || price > 500000) return null;
+
+  const areaM = text.match(/(\d+)\s*m[²2]/i);
+  const area = areaM ? parseInt(areaM[1], 10) : null;
+  if (area && (area < 6 || area > 120)) return null;
+
+  return {
+    price: Math.round(price),
+    area: area,
+    pricePerM2: area ? Math.round(price / area) : null,
+    title: text.split("|").slice(0, 2).join(" | ").trim().slice(0, 90)
+  };
+}
+
+async function scrapeCocheraPage(browser, url) {
+  const page = await newStealthPage(browser);
+  try {
+    const ok = await navigate(page, url, 25000);
+    if (!ok) return [];
+    await page.waitForTimeout(1500);
+
+    for (let i = 0; i < 5; i++) {
+      await page.mouse.wheel(0, 2500);
+      await page.waitForTimeout(550);
+    }
+
+    const cards = await page.evaluate(() => {
+      const out = [];
+      const els = document.querySelectorAll(
+        '[class*="postingCard-module__posting-container"], [class*="postingCard-module__posting-top"]'
+      );
+      for (const el of els) {
+        const t = (el.innerText || "").replace(/\n+/g, " | ").trim();
+        if (!t || !/S\/\s*\d/.test(t)) continue;
+        const a = el.querySelector("a[href]");
+        const href = a ? a.getAttribute("href") : "";
+        let src = "";
+        let best = 0;
+        for (const img of el.querySelectorAll("img")) {
+          const s = img.currentSrc || img.src || img.getAttribute("data-src") || "";
+          if (!s || /(logo|icon|avatar|favicon)/i.test(s)) continue;
+          const w = img.naturalWidth || img.width || 0;
+          if (w >= best) { best = w; src = s; }
+        }
+        out.push({ t, href, src });
+      }
+      return out;
+    });
+
+    const base = url.includes("urbania") ? "https://urbania.pe" : "https://www.adondevivir.com";
+    const seen = new Set();
+    const listings = [];
+    for (const c of cards) {
+      const card = parseCocheraCardText(c.t);
+      if (!card) continue;
+      const key = card.price + "|" + (c.t || "").slice(0, 40);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      card.source = url.includes("urbania") ? "Urbania" : "Adondevivir";
+      if (c.href) card.url = c.href.startsWith("http") ? c.href : base + c.href;
+      if (c.src) card.image = c.src;
+      listings.push(card);
+      if (listings.length >= 30) break;
+    }
+    return listings;
+  } catch (e) {
+    console.log("[scraper] scrapeCocheraPage falló para", url, "→", e.message);
+    return [];
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+async function getCocheraComparables(query) {
+  const cacheKey = "cochera::" + [query.district || "", query.city || ""].join("::");
+  const now = Date.now();
+  if (COCHERA_CACHE.has(cacheKey) && now - COCHERA_CACHE.get(cacheKey).fetchedAt < CACHE_TTL) {
+    return COCHERA_CACHE.get(cacheKey).data;
+  }
+
+  if (COCHERA_IN_FLIGHT.has(cacheKey)) {
+    return COCHERA_IN_FLIGHT.get(cacheKey);
+  }
+
+  const run = enqueueScrape(async () => {
+    const wait = Math.max(0, 2500 - (now - lastScrapeAt));
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastScrapeAt = Date.now();
+
+    const browser = await safeBrowser();
+    if (!browser) {
+      return { district: query.district || null, city: query.city || null, count: 0, avgPrice: null, medianPrice: null, minPrice: null, maxPrice: null, sources: [], listings: [], fetchedAt: new Date().toISOString(), error: "Chromium no pudo iniciarse (revisa los logs)" };
+    }
+
+    const urls = buildCocheraUrls(query);
+    const results = await Promise.all(
+      urls.map((u) => scrapeCocheraPage(browser, u.url).then((list) => ({ site: u.site, list })))
+    );
+
+    const all = [];
+    for (const r of results) all.push(...r.list);
+
+    const uniq = [];
+    const seen = new Set();
+    for (const l of all) {
+      const key = l.price + "|" + (l.area || "");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      uniq.push(l);
+    }
+
+    const prices = uniq.map((l) => l.price);
+    const data = {
+      district: query.district || null,
+      city: query.city || null,
+      count: uniq.length,
+      avgPrice: prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : null,
+      medianPrice: median(prices),
+      minPrice: prices.length ? Math.min(...prices) : null,
+      maxPrice: prices.length ? Math.max(...prices) : null,
+      sources: results.filter((r) => r.list.length).map((r) => r.site),
+      listings: uniq.slice(0, 18),
+      fetchedAt: new Date().toISOString()
+    };
+
+    if (data.count >= 1) {
+      COCHERA_CACHE.set(cacheKey, { data, fetchedAt: now });
+    }
+    console.log("[scraper] cocheras", query.district || query.city, "→", data.count, "avisos, promedio S/", data.avgPrice, "(", (data.sources || []).join("+") || "sin fuente", ")");
+    return data;
+  });
+
+  COCHERA_IN_FLIGHT.set(cacheKey, run);
+  try {
+    return await run;
+  } finally {
+    COCHERA_IN_FLIGHT.delete(cacheKey);
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* NEXO Inmobiliario (nexoinmobiliario.pe) — proyectos nuevos          */
 /* ------------------------------------------------------------------ */
 
@@ -962,6 +1152,8 @@ const RENT_CACHE = new Map();
 const RENT_IN_FLIGHT = new Map();
 const NEXO_CACHE = new Map();
 const NEXO_IN_FLIGHT = new Map();
+const COCHERA_CACHE = new Map();
+const COCHERA_IN_FLIGHT = new Map();
 
 // dataset de distritos de Lima para saber cuándo usar URLs con --lima--lima
 const DATA_DISTRICTS_SET = new Set([
@@ -975,4 +1167,4 @@ const DATA_DISTRICTS_SET = new Set([
   "Cieneguilla","Chaclacayo","Lurigancho-Chosica"
 ]);
 
-module.exports = { getComparables, getListingDetail, getRentals, getNexoProjects, buildUrls, buildRentUrls, buildNexoUrl, parseCardText, parseRentCardText, parseNexoItem, scrapeRemax, parseRemaxCard, scrapeNexo };
+module.exports = { getComparables, getListingDetail, getRentals, getNexoProjects, getCocheraComparables, buildUrls, buildRentUrls, buildNexoUrl, buildCocheraUrls, parseCardText, parseRentCardText, parseNexoItem, parseCocheraCardText, scrapeRemax, parseRemaxCard, scrapeNexo };

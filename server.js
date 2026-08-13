@@ -19,8 +19,9 @@ let getComparables = null;
 let getListingDetail = null;
 let getRentals = null;
 let getNexoProjects = null;
+let getCocheraComparables = null;
 try {
-  ({ getComparables, getListingDetail, getRentals, getNexoProjects } = require("./scraper"));
+  ({ getComparables, getListingDetail, getRentals, getNexoProjects, getCocheraComparables } = require("./scraper"));
 } catch (e) {
   console.log("  [aviso] Playwright no está instalado; los precios de mercado quedarán desactivados. Ejecuta: npm install");
 }
@@ -250,6 +251,37 @@ const server = http.createServer((req, res) => {
       .catch((e) => {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Error al obtener alquileres", detail: e.message }));
+      });
+    return;
+  }
+
+  if (parsed.pathname === "/api/cocheras") {
+    const q = parsed.query;
+    const query = {
+      district: q.district || null,
+      city: q.city || null
+    };
+    if (!query.district && !query.city) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Falta district o city", count: 0, avgPrice: null }));
+      return;
+    }
+    if (!getCocheraComparables) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Módulo de cocheras no disponible (npm install pendiente)", count: 0, avgPrice: null }));
+      return;
+    }
+    getCocheraComparables(query)
+      .then((data) => {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store"
+        });
+        res.end(JSON.stringify(data));
+      })
+      .catch((e) => {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Error al obtener comparables de cocheras", detail: e.message, count: 0, avgPrice: null }));
       });
     return;
   }

@@ -468,6 +468,47 @@ input[type="number"]:focus, select:focus, textarea:focus { border-color: var(--a
   background: var(--accent); color: #fff; border-color: var(--accent);
 }
 
+/* ---------- Cocheras ---------- */
+.parking-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 10px;
+  align-items: center; margin-bottom: 10px;
+}
+.parking-row-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.parking-type { width: 230px; }
+.checkbox-wrap {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-top: 12px; font-size: 13px; font-weight: 500;
+  color: var(--ink); cursor: pointer; line-height: 1.4;
+}
+.checkbox-wrap input[type="checkbox"] {
+  width: 16px; height: 16px; margin-top: 1px;
+  accent-color: var(--accent); cursor: pointer;
+}
+.parking-via-warning {
+  color: #b45309; font-weight: 600;
+  background: #fef3c7; border: 1px solid #f59e0b;
+  padding: 8px 10px; border-radius: 8px;
+}
+.parking-block { margin-top: 18px; }
+.parking-block h3 {
+  font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--ink-soft); margin: 0 0 4px;
+}
+.parking-ref {
+  font-size: 12px; color: var(--ink-soft); margin: 0 0 8px;
+}
+.parking-block table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.parking-block td { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.parking-block td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.parking-block tr:last-child td { border-bottom: none; }
+.parking-block tfoot td {
+  border-top: 2px solid var(--line); padding: 10px 0 0;
+  font-weight: 700; color: var(--ink);
+}
+.parking-block tfoot .tfoot-val { color: var(--accent); font-size: 16px; }
+.pk-v { white-space: nowrap; }
+.pk-zero { color: #9ca3af; font-weight: 500; }
+
 /* ---------- Zona determinada por IA (solo lectura) ---------- */
 .ai-zone-value {
   padding: 10px 12px; border-radius: 9px;

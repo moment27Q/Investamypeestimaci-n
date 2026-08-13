@@ -83,6 +83,15 @@
       " y acabados " + lbl(FINISH_LABELS, inputs.finishes).toLowerCase() + ".";
   }
 
+  function cocherasSummary(inputs) {
+    var count = parseInt(inputs.parkingCount, 10) || 0;
+    if (count <= 0) return "Sin cocheras";
+    var labels = { techada: "Techada individual", descubierta: "Descubierta / patio común", tandem: "Doble o tándem", via_publica: "En vía pública (no tasable)" };
+    var types = (inputs.parkingTypes || []).map(function (t) { return labels[t] || t; });
+    var det = types.length ? " — " + types.join("; ") : "";
+    return count + " cochera(s)" + det + (inputs.parkingRegistral === "si" ? " · con partida registral independiente" : " · sin independizar");
+  }
+
   function caracteristicas(inputs, r, env) {
     var t = inputs.type || "departamento";
     var rows = [
@@ -96,7 +105,7 @@
       rows.push(row("Baños", num(inputs.bathrooms)));
       rows.push(row("Piso / planta", num(inputs.floor)));
       rows.push(row("Pisos del edificio", num(inputs.totalFloors)));
-      rows.push(row("Estacionamiento", num(inputs.parking)));
+      rows.push(row("Cocheras / estacionamiento", cocherasSummary(inputs)));
       rows.push(row("Ascensor", siNo(inputs.elevator)));
       rows.push(row("Mantenimiento mensual", "S/ " + num(inputs.maintenance)));
       rows.push(row("Régimen", lbl(REGIME_LABELS, inputs.regime)));
@@ -107,7 +116,7 @@
       rows.push(row("Pisos de la casa", num(inputs.casaFloors)));
       rows.push(row("Terreno", num(inputs.terrenoArea) + " m²"));
       rows.push(row("Frente del lote", num(inputs.front) + " ml"));
-      rows.push(row("Estacionamiento", num(inputs.parking)));
+      rows.push(row("Cocheras / estacionamiento", cocherasSummary(inputs)));
       rows.push(row("Forma del lote", lbl(SHAPE_LABELS, inputs.shape)));
       rows.push(row("Topografía", lbl(TOPO_LABELS, inputs.topography)));
       rows.push(row("Cerco perimetral", siNo(inputs.fence)));
@@ -248,7 +257,7 @@
   }
 
   function secValor(r, rent) {
-    return "<h2>5. Valor de tasación</h2>" +
+    var html = "<h2>5. Valor de tasación</h2>" +
       "<table class=\"t\">" +
       row("Valor comercial", "<strong>S/ " + fmt(r.total) + "</strong>") +
       row("Valor en dólares americanos", fmt(r.totalUSD) + " USD") +
@@ -256,9 +265,30 @@
       row("Valor unitario efectivo", "S/ " + fmt(r.effectivePerM2) + "/m²") +
       row("Valor de realización rápida", "S/ " + fmt(r.realizationTotal) + " (≈ " + fmt(r.realizationTotalUSD) + " USD)") +
       row("Renta mensual estimada", "S/ " + fmt(rent.monthly)) +
-      "</table>" +
-      "<h3>5.1 Croquis de ubicación</h3>" +
+      "</table>";
+
+    var p = r.parking;
+    if (p && p.rows && p.rows.length) {
+      var reg = p.registral ? "con partida independiente" : "sin independizar";
+      var prows = "<table class=\"t\">" +
+        "<tr><th>Concepto</th><th>Valor</th></tr>" +
+        "<tr><td>Valor propiedad (sin cocheras)</td><td>S/ " + fmt(r.baseTotal) + "</td></tr>";
+      p.rows.forEach(function (c) {
+        if (c.taxable) {
+          prows += "<tr><td>+ Cochera " + c.index + " (" + esc(c.label) + ", " + reg + ")</td><td>+ S/ " + fmt(c.value) + "</td></tr>";
+        } else {
+          prows += "<tr><td>+ Cochera " + c.index + " (" + esc(c.label) + ")</td><td>S/ 0 — " + esc(c.note) + "</td></tr>";
+        }
+      });
+      prows += "<tr class=\"tot\"><th>= Valor total tasado</th><td>S/ " + fmt(r.total) + "</td></tr></table>";
+      html += "<h3>5.1 Desglose de cocheras</h3>" +
+        "<p>Valor referencial por cochera: <strong>S/ " + fmt(p.refValue) + "</strong> (" + esc(p.refSource) + ").</p>" +
+        prows;
+    }
+
+    html += "<h3>5.2 Croquis de ubicación</h3>" +
       "<div class=\"croquis\" contenteditable=\"true\" spellcheck=\"false\">CROQUIS / PLANO DE UBICACIÓN<br>(dibujar o describir la ubicación referencial)</div>";
+    return html;
   }
 
   function secConclusiones() {
@@ -298,7 +328,7 @@
     var loc = snap.location || {};
     var inputs = snap.inputs || {};
     var env = snap.envProfile;
-    var r = computeValuation(loc, inputs, snap.market, env, snap.descAdj);
+    var r = computeValuation(loc, inputs, snap.market, env, snap.descAdj, snap.photoAdj, snap.cocheraMarket);
     var rent = computeRent(loc, inputs, snap.rentMarket, env, snap.descAdj);
     var type = inputs.type || "departamento";
     var district = loc.district || loc.city || "—";

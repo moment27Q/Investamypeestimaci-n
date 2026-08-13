@@ -92,7 +92,7 @@ function describeInputs(inputs) {
   if (inputs.floor != null) parts.push("piso " + inputs.floor);
   if (inputs.totalFloors) parts.push("edificio de " + inputs.totalFloors + " pisos");
   if (inputs.elevator === "si") parts.push("con ascensor");
-  if (inputs.parking && inputs.parking !== "0") parts.push(inputs.parking + " estacionamiento(s)");
+  if (inputs.parkingCount && parseInt(inputs.parkingCount, 10) > 0) parts.push(inputs.parkingCount + " cochera(s)");
   if (inputs.view === "exterior") parts.push("vista exterior");
   if (inputs.finishes === "premium") parts.push("acabados premium");
   if (inputs.zoning) parts.push("zonificación " + inputs.zoning);

@@ -57,7 +57,16 @@
     areaLabel: $("areaLabel"),
     totalFloors: $("totalFloors"),
     elevator: $("elevator"),
-    parking: $("parking"),
+    parkingCount: $("parkingCount"),
+    parkingCountVal: $("parkingCountVal"),
+    parkingCountRange: $("parkingCountRange"),
+    parkingRows: $("parkingRows"),
+    parkingRegistral: $("parkingRegistral"),
+    parkingViaWarning: $("parkingViaWarning"),
+    parkingBlock: $("parkingBlock"),
+    parkingBody: $("parkingBody"),
+    parkingRef: $("parkingRef"),
+    parkingFootTotal: $("parkingFootTotal"),
     storage: $("storage"),
     finishes: $("finishes"),
     finishesValue: $("finishesValue"),
@@ -128,6 +137,10 @@
     rentSeq: 0,
     rentRest: [],
     envProfile: null,
+    cocheraMarket: null,
+    cocheraFetching: false,
+    cocheraSeq: 0,
+    cocheraDone: false,
     areaTouched: false,
     dirty: false,
     tasado: false,
@@ -491,7 +504,7 @@
     if (priceBlock) priceBlock.classList.add("hidden");
     if (empty) empty.classList.add("hidden");
     [els.marketPanel, els.envPanel, els.rentalPanel, els.confidence,
-      els.breakdown, els.legalPanel, els.descNote].forEach((el) => el && el.classList.add("hidden"));
+      els.breakdown, els.legalPanel, els.descNote, els.parkingBlock].forEach((el) => el && el.classList.add("hidden"));
     if (els.propertyPhotoNote) els.propertyPhotoNote.classList.add("hidden");
   }
 
@@ -511,11 +524,13 @@
     state.lastTotal = 0;
     state.market = null;
     state.rentMarket = null;
+    state.cocheraMarket = null;
     state.envProfile = null;
     state.descAdj = null;
     state.photoAdj = null;
     state.marketSeq++;
     state.rentSeq++;
+    state.cocheraSeq++;
     state.descSeq++;
     envSeq++;
     hideAllResults();
@@ -710,10 +725,35 @@
           "</table>" +
           "<div style=\"font-size:14px;font-weight:600;margin:14px 0 4px\">Desglose de factores</div>" +
           "<table style=\"width:100%;border-collapse:collapse;font-size:13px\">" + rows + "</table>" +
+          parkingEmailBlock(r) +
           "<p style=\"font-size:12px;color:#9ca3af;margin-top:22px;border-top:1px solid #e5e7eb;padding-top:12px\">Valor estimado con fines orientativos, basado en datos de mercado y en las características declaradas. No constituye una tasación profesional.</p>" +
         "</div>" +
       "</div>"
     );
+  }
+
+  function parkingEmailBlock(r) {
+    const p = r.parking;
+    if (!p || !p.rows || !p.rows.length) return "";
+    const reg = p.registral ? "con partida independiente" : "sin independizar";
+    let rowsHtml =
+      "<tr><td style=\"padding:5px 0;color:#4b5563\">Valor propiedad (sin cocheras)</td>" +
+      "<td style=\"padding:5px 0;text-align:right;font-weight:600\">S/ " + fmt(r.baseTotal) + "</td></tr>";
+    p.rows.forEach((c) => {
+      if (c.taxable) {
+        rowsHtml += "<tr><td style=\"padding:5px 0;color:#4b5563\">+ Cochera " + c.index + " (" +
+          esc(c.label) + ", " + reg + ")</td>" +
+          "<td style=\"padding:5px 0;text-align:right;font-weight:600\">+ S/ " + fmt(c.value) + "</td></tr>";
+      } else {
+        rowsHtml += "<tr><td style=\"padding:5px 0;color:#9ca3af\">+ Cochera " + c.index + " (" +
+          esc(c.label) + ")</td>" +
+          "<td style=\"padding:5px 0;text-align:right;font-weight:600\">S/ 0 · " + esc(c.note) + "</td></tr>";
+      }
+    });
+    rowsHtml += "<tr><td style=\"padding:6px 0;color:#374151;font-weight:700\">= Valor total tasado</td>" +
+      "<td style=\"padding:6px 0;text-align:right;font-weight:700;color:#15803d\">S/ " + fmt(r.total) + "</td></tr>";
+    return "<div style=\"font-size:14px;font-weight:600;margin:14px 0 4px\">Desglose de cocheras</div>" +
+      "<table style=\"width:100%;border-collapse:collapse;font-size:13px\">" + rowsHtml + "</table>";
   }
 
   function sendValuationEmail(r) {
@@ -844,9 +884,11 @@
     state.market = null;
     state.rentMarket = null;
     state.envProfile = null;
+    state.cocheraMarket = null;
     state.marketDone = false;
     state.rentDone = false;
     state.envDone = false;
+    state.cocheraDone = false;
     if (els.resultCard) els.resultCard.classList.remove("stale");
     setLoading(true);
     saveSnapshot();
@@ -855,7 +897,8 @@
       fetchRentals(),
       fetchEnvironment(),
       fetchDescription(),
-      fetchPropertyPhotos()
+      fetchPropertyPhotos(),
+      fetchCocheras()
     ]).then(() => {
       if (!state.tasado || runId !== state.runSeq) return;
       setLoading(false);
@@ -879,6 +922,7 @@
         inputs: readInputs(),
         market: state.market,
         rentMarket: state.rentMarket,
+        cocheraMarket: state.cocheraMarket,
         envProfile: state.envProfile,
         descAdj: state.descAdj,
         generatedAt: new Date().toISOString()
@@ -998,7 +1042,7 @@
   });
 
   [els.piso, els.condicion, els.estado, els.zona,
-    els.totalFloors, els.elevator, els.parking, els.storage,
+    els.totalFloors, els.elevator, els.storage,
     els.finishes, els.amenities, els.maintenance, els.regime, els.casaFloors,
     els.shape, els.topography, els.fence, els.zoning, els.services,
     els.corner, els.urbanization, els.road
@@ -1017,18 +1061,83 @@
     }
   });
 
-  /* Estacionamiento: botones Sí/No sincronizados con el select oculto */
-  const parkingToggle = $("parkingToggle");
-  if (parkingToggle && els.parking) {
-    parkingToggle.addEventListener("click", (e) => {
-      const btn = e.target.closest(".btn-toggle-btn");
-      if (!btn || !parkingToggle.contains(btn)) return;
-      parkingToggle.querySelectorAll(".btn-toggle-btn").forEach((b) =>
-        b.classList.toggle("active", b === btn)
-      );
-      els.parking.value = btn.dataset.parking;
+  /* ---------------- Cocheras / estacionamiento ---------------- */
+  const PARKING_TYPES = [
+    { value: "techada", label: "Techada individual" },
+    { value: "descubierta", label: "Descubierta / patio común" },
+    { value: "tandem", label: "Doble o tándem" },
+    { value: "via_publica", label: "En vía pública (no tasable)" }
+  ];
+
+  function renderParkingRows() {
+    if (!els.parkingRows) return;
+    const n = clamp(parseInt(els.parkingCount.value, 10) || 0, 0, 10);
+    els.parkingRows.innerHTML = "";
+    let hasViaPublica = false;
+    for (let i = 0; i < n; i++) {
+      const wrap = document.createElement("div");
+      wrap.className = "parking-row";
+      const lbl = document.createElement("span");
+      lbl.className = "parking-row-label";
+      lbl.textContent = "Cochera " + (i + 1);
+      const sel = document.createElement("select");
+      sel.className = "parking-type";
+      sel.dataset.index = String(i);
+      PARKING_TYPES.forEach((t) => {
+        const opt = document.createElement("option");
+        opt.value = t.value;
+        opt.textContent = t.label;
+        sel.appendChild(opt);
+      });
+      wrap.appendChild(lbl);
+      wrap.appendChild(sel);
+      els.parkingRows.appendChild(wrap);
+      sel.addEventListener("change", () => {
+        updateParkingWarning();
+        markDirty();
+      });
+    }
+    updateParkingWarning();
+  }
+
+  function updateParkingWarning() {
+    if (!els.parkingRows) return;
+    let hasViaPublica = false;
+    els.parkingRows.querySelectorAll(".parking-type").forEach((s) => {
+      if (s.value === "via_publica") hasViaPublica = true;
+    });
+    if (els.parkingViaWarning) {
+      els.parkingViaWarning.classList.toggle("hidden", !hasViaPublica);
+    }
+  }
+
+  function readParkingTypes() {
+    const out = [];
+    if (els.parkingRows) {
+      els.parkingRows.querySelectorAll(".parking-type").forEach((s) => out.push(s.value));
+    }
+    return out;
+  }
+
+  if (els.parkingCountRange && els.parkingCount) {
+    els.parkingCountRange.addEventListener("input", () => {
+      els.parkingCount.value = els.parkingCountRange.value;
+      if (els.parkingCountVal) els.parkingCountVal.textContent = els.parkingCountRange.value;
+      renderParkingRows();
       markDirty();
     });
+    els.parkingCount.addEventListener("input", () => {
+      let v = parseInt(els.parkingCount.value, 10);
+      if (isNaN(v)) v = 0;
+      v = Math.max(0, Math.min(10, v));
+      els.parkingCount.value = v;
+      els.parkingCountRange.value = Math.min(v, parseInt(els.parkingCountRange.max, 10));
+      if (els.parkingCountVal) els.parkingCountVal.textContent = String(v);
+      renderParkingRows();
+      markDirty();
+    });
+    if (els.parkingRegistral) els.parkingRegistral.addEventListener("change", markDirty);
+    renderParkingRows();
   }
 
   els.lmClose.addEventListener("click", closeListingModal);
@@ -1214,7 +1323,9 @@
       zone: els.zona.value,
       totalFloors: parseInt(els.totalFloors.value) || null,
       elevator: els.elevator.value,
-      parking: els.parking.value,
+      parkingCount: parseInt(els.parkingCount.value, 10) || 0,
+      parkingTypes: readParkingTypes(),
+      parkingRegistral: els.parkingRegistral && els.parkingRegistral.checked ? "si" : "no",
       storage: els.storage.value,
       finishes: els.finishes.value,
       amenities: els.amenities.value,
@@ -1239,16 +1350,51 @@
   }
 
   /* ---------------- Cálculo ---------------- */
+  /* ---------------- Desglose de cocheras en el resultado ---------------- */
+  function renderParkingBreakdown(parking, baseTotal, total) {
+    if (!els.parkingBlock) return;
+    if (!parking || parking.count <= 0 || !parking.rows.length) {
+      els.parkingBlock.classList.add("hidden");
+      return;
+    }
+    els.parkingBlock.classList.remove("hidden");
+
+    const registralLabel = parking.registral ? "con partida independiente" : "sin independizar";
+    els.parkingRef.textContent = "Valor referencial por cochera: S/ " + fmt(parking.refValue) +
+      " (" + parking.refSource + ")" + (parking.registral ? " · factor registral ×1.00" : " · factor registral ×0.60");
+
+    els.parkingBody.innerHTML = "";
+    const baseRow = document.createElement("tr");
+    baseRow.innerHTML = "<td>Valor propiedad (sin cocheras)</td><td class=\"pk-v\">S/ " + fmt(baseTotal) + "</td>";
+    els.parkingBody.appendChild(baseRow);
+
+    parking.rows.forEach((c) => {
+      const tr = document.createElement("tr");
+      if (c.taxable) {
+        tr.innerHTML = "<td>+ Cochera " + c.index + " (" + esc(c.label) + ", " + registralLabel + ")</td>" +
+          "<td class=\"pk-v\">+ S/ " + fmt(c.value) + "</td>";
+      } else {
+        tr.innerHTML = "<td>+ Cochera " + c.index + " (" + esc(c.label) + ")</td>" +
+          "<td class=\"pk-v pk-zero\">S/ 0 · " + esc(c.note) + "</td>";
+      }
+      els.parkingBody.appendChild(tr);
+    });
+
+    if (els.parkingFootTotal) els.parkingFootTotal.textContent = "S/ " + fmt(total);
+  }
+
   function recompute() {
     if (!state.tasado || !state.location || state.loading) return;
     const inputs = readInputs();
-    const r = computeValuation(state.location, inputs, state.market, state.envProfile, state.descAdj, state.photoAdj);
+    const r = computeValuation(state.location, inputs, state.market, state.envProfile, state.descAdj, state.photoAdj, state.cocheraMarket);
 
     const priceBlock = document.querySelector(".price-block");
     const empty = document.querySelector(".empty-state");
     priceBlock.classList.remove("hidden");
     empty.classList.add("hidden");
     els.legalPanel.classList.remove("hidden");
+
+    renderParkingBreakdown(r.parking, r.baseTotal, r.total);
 
     animatePrice(r.total);
 
@@ -1449,6 +1595,52 @@
       recompute();
     } finally {
       if (seq === state.marketSeq) state.marketFetching = false;
+    }
+  }
+
+  /* ---------------- Comparables de cocheras (valor referencial por zona) ---------------- */
+  async function fetchCocheras() {
+    const loc = state.location;
+    if (!loc || (!loc.district && !loc.city)) return;
+
+    const seq = ++state.cocheraSeq;
+    state.cocheraFetching = true;
+    state.cocheraDone = true;
+    try {
+      const params = new URLSearchParams({
+        district: loc.district || "",
+        city: loc.city || ""
+      });
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 120000);
+      let res;
+      try {
+        res = await fetch("/api/cocheras?" + params.toString(), { signal: ctrl.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+      const data = await res.json().catch(() => ({}));
+      if (seq !== state.cocheraSeq || !state.location) return;
+      if (!res.ok || data.error) {
+        state.cocheraMarket = null;
+        return;
+      }
+      state.cocheraMarket = data;
+      if (data.count >= 3 && data.avgPrice) {
+        console.log("[cocheras] método: comparables reales → " + data.count +
+          " avisos, valor referencial por cochera ≈ S/ " +
+          Math.round(data.avgPrice).toLocaleString("es-PE") + " (" +
+          (data.sources || []).join("+") + ")");
+      } else {
+        console.log("[cocheras] método: fallback → sin suficientes comparables (" +
+          (data.count || 0) + " de 3); se usará el valor por defecto.");
+      }
+    } catch (e) {
+      if (seq !== state.cocheraSeq) return;
+      state.cocheraMarket = null;
+      console.log("[cocheras] error al obtener comparables:", e.message || e);
+    } finally {
+      if (seq === state.cocheraSeq) state.cocheraFetching = false;
     }
   }
 

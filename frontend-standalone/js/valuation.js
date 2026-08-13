@@ -44,7 +44,6 @@ const FINISH_FACTORS = { basico: 0.94, intermedio: 1.00, premium: 1.07 };
 const VIEW_FACTORS = { none: 1.00, exterior: 1.02, interior: 0.98 };
 const REGIME_FACTORS = { independiente: 1.00, condominio: 1.05 };
 const AMENITIES_FACTORS = { ninguno: 0.98, basico: 1.00, medio: 1.02, completo: 1.04 };
-const PARKING_FACTORS = { 0: 0.99, 1: 1.00, 2: 1.02, 3: 1.03 };
 const ELEVATOR_FACTORS = { si: 1.02, no: 1.00 };
 const STORAGE_FACTORS = { si: 1.01, no: 1.00 };
 const SHAPE_FACTORS = { regular: 1.00, irregular: 0.93 };
@@ -57,6 +56,110 @@ const CORNER_FACTORS = { esquina: 1.06, intermedio: 1.00 };
 const FENCE_FACTORS = { si: 1.00, no: 0.97 };
 
 const REFERENCE_AREA = { departamento: 70, casa: 180, terreno: 300, local: 100, oficina: 100 };
+
+/* ---------------- Valoración de cocheras / estacionamiento ---------------- */
+
+const PARKING_TYPE_FACTORS = {
+  techada: 1.0,        // cochera individual techada
+  descubierta: 0.65,   // descubierta / patio común
+  tandem: 1.45,        // doble o tándem: factor aplica sobre el PAR, no por unidad
+  via_publica: 0       // en vía pública: no es un activo tasable
+};
+
+const PARKING_REGISTRAL_FACTORS = { si: 1.0, no: 0.6 };
+
+// TODO: reemplazar con una tabla real de valor referencial de cochera por distrito
+// (ej. { "Miraflores": 55000, "San Isidro": 60000, ... }). Mientras no exista,
+// se usa este valor por defecto cuando no hay comparables reales disponibles.
+const DEFAULT_PARKING_REF = 15000;
+
+const PARKING_TYPE_LABELS = {
+  techada: "Techada individual",
+  descubierta: "Descubierta / patio común",
+  tandem: "Doble o tándem",
+  via_publica: "En vía pública (no tasable)"
+};
+
+/*
+ * Valor_cochera = Valor_referencial_zona_por_cochera × Factor_tipo × Factor_registral
+ *  - Factor_tipo: techada 1.0 · descubierta 0.65 · tándem 1.45 (sobre el par) · vía pública 0
+ *  - Factor_registral: con partida SUNARP independiente 1.0 · sin independizar 0.6
+ * Para más de una cochera (excluyendo el tándem, que ya cuenta como par):
+ *   Valor_total = Valor_1 + Σ(Valor_n × 0.90)  para n = 2, 3, ...
+ * El valor referencial sale de comparables reales de cocheras sueltas (cocheraMarket);
+ * si hay menos de 3 comparables se usa DEFAULT_PARKING_REF.
+ */
+function computeParkingValue(inputs, cocheraMarket) {
+  const count = clamp(parseInt(inputs.parkingCount, 10) || 0, 0, 10);
+  if (count <= 0) {
+    return { total: 0, rows: [], refValue: null, method: "none", count: 0 };
+  }
+
+  // Valor referencial por cochera según la zona (comparables reales o fallback)
+  let refValue, method, source;
+  if (cocheraMarket && cocheraMarket.count >= 3 && cocheraMarket.avgPrice) {
+    refValue = cocheraMarket.avgPrice;
+    method = "comparables";
+    source = "promedio de " + cocheraMarket.count + " avisos reales de cocheras en el distrito";
+  } else {
+    refValue = DEFAULT_PARKING_REF;
+    method = "fallback";
+    source = "valor por defecto (sin comparables suficientes)";
+  }
+
+  const types = Array.isArray(inputs.parkingTypes) ? inputs.parkingTypes : [];
+  const regFactor = PARKING_REGISTRAL_FACTORS[inputs.parkingRegistral === "si" ? "si" : "no"] || 1;
+
+  const rows = [];
+  let total = 0;
+  let tandemCount = 0;
+  for (let i = 0; i < count; i++) {
+    const type = PARKING_TYPE_FACTORS[types[i]] != null ? types[i] : "techada";
+    if (type === "via_publica") {
+      rows.push({
+        index: i + 1,
+        type: type,
+        label: PARKING_TYPE_LABELS[type],
+        factor: 0,
+        value: 0,
+        taxable: false,
+        note: "no se considera activo tasable"
+      });
+      continue;
+    }
+    // El tándem representa un PAR de cocheras; solo se valora un par.
+    if (type === "tandem") {
+      tandemCount++;
+      if (tandemCount > 1) continue;
+    }
+    const typeFactor = PARKING_TYPE_FACTORS[type];
+    // La primera cochera se valora completa; de la segunda en adelante ×0.90.
+    const isExtra = rows.filter((r) => r.taxable).length >= 1;
+    const value = refValue * typeFactor * regFactor * (isExtra ? 0.9 : 1);
+    rows.push({
+      index: i + 1,
+      type: type,
+      label: PARKING_TYPE_LABELS[type],
+      factor: typeFactor,
+      regFactor: regFactor,
+      value: Math.round(value),
+      taxable: true,
+      isExtra: isExtra,
+      note: type === "tandem" ? "aplica sobre el par" : ""
+    });
+    total += value;
+  }
+
+  return {
+    total: Math.round(total),
+    rows: rows,
+    count: count,
+    refValue: refValue,
+    refSource: source,
+    method: method,
+    registral: inputs.parkingRegistral === "si"
+  };
+}
 
 function fr(rows, key, label, factor) {
   if (factor !== 1) rows.push({ key: key, label: label, factor: factor, pct: (factor - 1) * 100 });
@@ -96,7 +199,6 @@ function calcDepartamento(inputs, envFactor, refArea) {
   const totalFloors = clamp(inputs.totalFloors || 5, 1, 60);
   const buildingFactor = totalFloors >= 15 ? 1.02 : totalFloors >= 8 ? 1.01 : 1.0;
   const elevatorFactor = ELEVATOR_FACTORS[inputs.elevator] || 1;
-  const parkingFactor = PARKING_FACTORS[inputs.parking] || 1;
   const storageFactor = STORAGE_FACTORS[inputs.storage] || 1;
   const viewFactor = VIEW_FACTORS[inputs.view] || 1;
   const finishesFactor = FINISH_FACTORS[inputs.finishes] || 1;
@@ -117,7 +219,6 @@ function calcDepartamento(inputs, envFactor, refArea) {
   fr(rows, "bano", "Baños (" + bathrooms + ")", bathroomFactor);
   fr(rows, "edificio", "Edificio de " + totalFloors + " pisos", buildingFactor);
   fr(rows, "ascensor", inputs.elevator === "si" ? "Con ascensor" : "Sin ascensor", elevatorFactor);
-  fr(rows, "parqueo", "Estacionamiento (" + inputs.parking + ")", parkingFactor);
   fr(rows, "deposito", inputs.storage === "si" ? "Con depósito" : "Sin depósito", storageFactor);
   if (inputs.view) fr(rows, "vista", "Vista " + inputs.view, viewFactor);
   fr(rows, "acabados", "Acabados " + inputs.finishes, finishesFactor);
@@ -128,7 +229,7 @@ function calcDepartamento(inputs, envFactor, refArea) {
 
   const factor = typeFactor * sizeFactor * ageFactor * conditionFactor * floorFactor *
     zoneFactor * estadoFactor * bedroomFactor * bathroomFactor * buildingFactor *
-    elevatorFactor * parkingFactor * storageFactor * viewFactor * finishesFactor *
+    elevatorFactor * storageFactor * viewFactor * finishesFactor *
     amenitiesFactor * regimeFactor * maintenanceFactor * envF;
 
   return { area: area, factor: factor, rows: rows };
@@ -154,7 +255,6 @@ function calcCasa(inputs, envFactor, refArea) {
   const bathroomFactor = clamp(1 + (bathrooms - 3) * 0.005, 0.96, 1.03);
   const houseFloors = clamp(inputs.casaFloors || 2, 1, 8);
   const floorsFactor = clamp(1 + (houseFloors - 2) * 0.01, 0.98, 1.06);
-  const parkingFactor = PARKING_FACTORS[inputs.parking] || 1;
   const front = clamp(inputs.front || 10, 3, 60);
   const frontFactor = clamp(1 + (front - 10) * 0.004, 0.92, 1.06);
   const shapeFactor = SHAPE_FACTORS[inputs.shape] || 1;
@@ -180,7 +280,6 @@ function calcCasa(inputs, envFactor, refArea) {
   fr(rows, "pisos", "Pisos de la casa (" + houseFloors + ")", floorsFactor);
   fr(rows, "dorm", "Dormitorios (" + bedrooms + ")", bedroomFactor);
   fr(rows, "bano", "Baños (" + bathrooms + ")", bathroomFactor);
-  fr(rows, "parqueo", "Estacionamiento (" + inputs.parking + ")", parkingFactor);
   fr(rows, "frente", "Frente del lote (" + front + " ml)", frontFactor);
   fr(rows, "forma", "Forma " + inputs.shape, shapeFactor);
   fr(rows, "topografia", "Topografía " + inputs.topography, topoFactor);
@@ -192,7 +291,7 @@ function calcCasa(inputs, envFactor, refArea) {
 
   const factor = typeFactor * sizeFactor * landFactor * ageFactor * conditionFactor *
     zoneFactor * estadoFactor * floorsFactor * bedroomFactor * bathroomFactor *
-    parkingFactor * frontFactor * shapeFactor * topoFactor * fenceFactor *
+    frontFactor * shapeFactor * topoFactor * fenceFactor *
     gardenFactor * finishesFactor * remodelFactor * envF;
 
   return { area: builtArea, factor: factor, rows: rows };
@@ -396,7 +495,7 @@ function isLimaZone(location) {
   return false;
 }
 
-function computeValuation(location, inputs, market, envProfile, descAdj, photoAdj) {
+function computeValuation(location, inputs, market, envProfile, descAdj, photoAdj, cocheraMarket) {
   const base = resolveBasePrice(location, market);
   const envRaw = envProfile && envProfile.environmentFactor ? envProfile.environmentFactor : 1;
   const envFactor = 1 + (envRaw - 1) * 0.5;
@@ -418,7 +517,10 @@ function computeValuation(location, inputs, market, envProfile, descAdj, photoAd
   else calc = calcGeneric(inputs, envFactor, type, refArea);
 
   const effectivePerM2 = base.base * calc.factor;
-  const total = effectivePerM2 * calc.area * descFactor * photoFactor;
+  const baseTotal = effectivePerM2 * calc.area * descFactor * photoFactor;
+  // Las cocheras se suman como activo separado (no son factor multiplicativo).
+  const parking = computeParkingValue(inputs, cocheraMarket);
+  const total = baseTotal + parking.total;
   const rangeLow = total * 0.92;
   const rangeHigh = total * 1.08;
   const realization = total * 0.8;
@@ -454,6 +556,7 @@ function computeValuation(location, inputs, market, envProfile, descAdj, photoAd
   return {
     basePerM2: base.base,
     effectivePerM2: effectivePerM2,
+    baseTotal: baseTotal,
     total: total,
     totalUSD: total / DATA.fx,
     rangeLow: rangeLow,
@@ -464,6 +567,7 @@ function computeValuation(location, inputs, market, envProfile, descAdj, photoAd
     realizationTotalUSD: realization / DATA.fx,
     area: calc.area,
     factors: factors,
+    parking: parking,
     confidence: base.level,
     confidenceMsg: base.msg,
     zoneLabel: base.label,

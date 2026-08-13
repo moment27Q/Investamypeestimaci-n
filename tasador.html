@@ -177,15 +177,22 @@
             </select>
           </div>
           <div class="field" data-types="departamento casa">
-            <label>Estacionamiento</label>
-            <div class="btn-toggle" id="parkingToggle" role="group" aria-label="Estacionamiento">
-              <button type="button" class="btn-toggle-btn active" data-parking="0">Sin estacionamiento</button>
-              <button type="button" class="btn-toggle-btn" data-parking="1">Con estacionamiento</button>
+            <label>Cocheras / estacionamiento</label>
+            <div class="label-row">
+              <span class="value-out" id="parkingCountVal">0</span>
+              <div class="value-input-wrap">
+                <input type="number" id="parkingCount" class="value-input" value="0" min="0" max="10">
+                <span class="value-unit">cochera(s)</span>
+              </div>
             </div>
-            <select id="parking" class="hidden">
-              <option value="0" selected>Sin estacionamiento</option>
-              <option value="1">Con estacionamiento</option>
-            </select>
+            <input type="range" id="parkingCountRange" min="0" max="6" step="1" value="0">
+            <div id="parkingRows"></div>
+            <p class="field-help parking-via-warning hidden" id="parkingViaWarning">⚠ Las cocheras "en vía pública" no se consideran un activo tasable y no suman valor a la tasación.</p>
+            <label class="checkbox-wrap" id="parkingRegistralWrap">
+              <input type="checkbox" id="parkingRegistral">
+              <span>¿Tiene partida registral independiente en SUNARP?</span>
+            </label>
+            <p class="field-help">Sin independización registral el valor de cada cochera se reduce (×0.60). Las cocheras dobles/tándem se valoran por el par.</p>
           </div>
           <div class="field" data-types="departamento">
             <label>Depósito</label>
@@ -461,6 +468,20 @@
             <button type="button" class="legal-btn" id="legalBtn">Haz tu tasación legal</button>
             <button type="button" class="legal-btn legal-btn-secondary" id="appraiserBtn">Contactar a un tasador profesional</button>
             <button type="button" class="legal-btn legal-btn-secondary" id="compareBtn">Comparar con proyectos nuevos ↗</button>
+          </div>
+
+          <div class="parking-block hidden" id="parkingBlock">
+            <h3>Desglose de cocheras</h3>
+            <p class="parking-ref" id="parkingRef"></p>
+            <table>
+              <tbody id="parkingBody"></tbody>
+              <tfoot>
+                <tr>
+                  <td>Valor total tasado</td>
+                  <td class="tfoot-val" id="parkingFootTotal">—</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
 
           <div class="breakdown hidden" id="breakdown">
