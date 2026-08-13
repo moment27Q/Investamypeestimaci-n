@@ -1,22 +1,43 @@
 const GEO = {
   async search(query) {
-    const res = await fetch("/api/geocode?q=" + encodeURIComponent(query), {
-      headers: { "Accept": "application/json" }
-    });
-    if (!res.ok) throw new Error("Geocoder HTTP " + res.status);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    return data || [];
+    try {
+      return await GEO._fetchJSON(apiUrl("/api/geocode?q=" + encodeURIComponent(query)));
+    } catch (e) {
+      if (e.authoritative) throw e;
+      return GEO._fetchJSON("https://nominatim.openstreetmap.org/search?format=jsonv2" +
+        "&addressdetails=1&countrycodes=pe&limit=8&dedupe=1&accept-language=es&q=" +
+        encodeURIComponent(query));
+    }
   },
 
   async reverse(lat, lon) {
-    const res = await fetch("/api/reverse?lat=" + lat + "&lon=" + lon, {
-      headers: { "Accept": "application/json" }
-    });
-    if (!res.ok) throw new Error("Geocoder HTTP " + res.status);
-    const data = await res.json();
-    if (data.error || !data.lat) throw new Error(data.error || "Sin resultado");
-    return data;
+    try {
+      const data = await GEO._fetchJSON(apiUrl("/api/reverse?lat=" + lat + "&lon=" + lon));
+      if (!data.lat) throw new Error("Sin resultado");
+      return data;
+    } catch (e) {
+      if (e.authoritative) throw e;
+      const data = await GEO._fetchJSON("https://nominatim.openstreetmap.org/reverse?format=jsonv2" +
+        "&addressdetails=1&accept-language=es&lat=" + lat + "&lon=" + lon);
+      if (!data.lat) throw new Error("Sin resultado");
+      return data;
+    }
+  },
+
+  _fetchJSON(url) {
+    return fetch(url, { headers: { "Accept": "application/json" } })
+      .then((res) => {
+        if (!res.ok) throw new Error("Geocoder HTTP " + res.status);
+        return res.json();
+      })
+      .then((data) => {
+        if (data && data.error) {
+          const err = new Error(data.error);
+          err.authoritative = true;
+          throw err;
+        }
+        return data;
+      });
   },
 
   formatAddress(a, name) {

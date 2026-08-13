@@ -400,7 +400,7 @@
       city: loc.city || "",
       address: loc.display || ""
     });
-    fetch("/api/validate-location?" + params.toString())
+    fetch(apiUrl("/api/validate-location?" + params.toString()))
       .then((r) => r.json())
       .then((data) => {
         if (seq !== state.aiLocSeq) return;
@@ -761,7 +761,7 @@
     state.emailSent = true;
     const to = getLeadEmail();
     if (!to) return;
-    fetch("/api/enviar-tasacion", {
+    fetch(apiUrl("/api/enviar-tasacion"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1491,7 +1491,7 @@
     const seq = ++state.photoSeq;
     setPropertyPhotoStatus("La IA está revisando " + state.photos.length + " foto(s) para ajustar la tasación…", false);
     try {
-      const res = await fetch("/api/analiza-fotos", {
+      const res = await fetch(apiUrl("/api/analiza-fotos"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1554,7 +1554,7 @@
       const timer = setTimeout(() => ctrl.abort(), 120000);
       let res;
       try {
-        res = await fetch("/api/comparables?" + params.toString(), { signal: ctrl.signal });
+        res = await fetch(apiUrl("/api/comparables?" + params.toString()), { signal: ctrl.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -1615,7 +1615,7 @@
       const timer = setTimeout(() => ctrl.abort(), 120000);
       let res;
       try {
-        res = await fetch("/api/cocheras?" + params.toString(), { signal: ctrl.signal });
+        res = await fetch(apiUrl("/api/cocheras?" + params.toString()), { signal: ctrl.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -1733,7 +1733,7 @@
       const timer = setTimeout(() => ctrl.abort(), 120000);
       let res;
       try {
-        res = await fetch("/api/rentals?" + params.toString(), { signal: ctrl.signal });
+        res = await fetch(apiUrl("/api/rentals?" + params.toString()), { signal: ctrl.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -1851,7 +1851,7 @@
     renderRentModal(l, r);
 
     if (l.url) {
-      fetch("/api/listing-detail?url=" + encodeURIComponent(l.url))
+      fetch(apiUrl("/api/listing-detail?url=" + encodeURIComponent(l.url)))
         .then((res) => res.json())
         .then((d) => {
           if (els.listingModal.classList.contains("hidden")) return;
@@ -1950,7 +1950,7 @@
     renderListingModal(l, r);
 
     if (l.url) {
-      fetch("/api/listing-detail?url=" + encodeURIComponent(l.url))
+      fetch(apiUrl("/api/listing-detail?url=" + encodeURIComponent(l.url)))
         .then((res) => res.json())
         .then((d) => {
           if (els.listingModal.classList.contains("hidden")) return;
@@ -2084,7 +2084,7 @@
         lat: loc.lat != null ? loc.lat : "",
         lon: loc.lon != null ? loc.lon : ""
       });
-      const res = await fetch("/api/environment?" + params.toString());
+      const res = await fetch(apiUrl("/api/environment?" + params.toString()));
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
       if (seq !== envSeq || !state.location) return;
@@ -2116,7 +2116,7 @@
       const timer = setTimeout(() => ctrl.abort(), 40000);
       let res;
       try {
-        res = await fetch("/api/descripcion", {
+        res = await fetch(apiUrl("/api/descripcion"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: ctrl.signal,

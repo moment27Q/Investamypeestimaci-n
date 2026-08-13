@@ -584,7 +584,7 @@
     try {
       var ctrl = new AbortController();
       var timer = setTimeout(function () { ctrl.abort(); }, 50000);
-      var res = await fetch("/api/maximiza?" + params.toString(), { signal: ctrl.signal });
+      var res = await fetch(apiUrl("/api/maximiza?" + params.toString()), { signal: ctrl.signal });
       clearTimeout(timer);
       var data = await res.json().catch(function () { return {}; });
       state.ai = (data && data.enabled) ? data : { enabled: false, reason: (data && data.reason) || "error" };
@@ -755,7 +755,7 @@
     setPhotoStatus("Analizando " + Math.min(4, state.photos.length) + " foto(s) con IA…");
     els.photoResult.classList.add("hidden");
     try {
-      var res = await fetch("/api/analiza-fotos", {
+      var res = await fetch(apiUrl("/api/analiza-fotos"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

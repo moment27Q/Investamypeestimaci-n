@@ -27,24 +27,51 @@ try {
 }
 
 let sendMail = null;
-try {
-  const nodemailer = require("nodemailer");
-  sendMail = (to, subject, html) => {
-    const transporter = nodemailer.createTransport({
-      host: process.env.MAIL_HOST || "tasador.investamype.com",
-      port: parseInt(process.env.MAIL_PORT || "465", 10),
-      secure: true,
-      auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS }
+const MAIL_FROM = process.env.MAIL_FROM || process.env.MAIL_USER || "contacto@tasador.investamype.com";
+const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || "Tasador Perú";
+
+if (process.env.BREVO_API_KEY) {
+  // Brevo (ex Sendinblue) por HTTPS: funciona en el plan Free de Render,
+  // que bloquea el SMTP saliente (puertos 25/465/587).
+  sendMail = async (to, subject, html) => {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": process.env.BREVO_API_KEY,
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({
+        sender: { name: MAIL_FROM_NAME, email: MAIL_FROM },
+        to: [{ email: String(to) }],
+        subject: String(subject),
+        htmlContent: String(html)
+      })
     });
-    return transporter.sendMail({
-      from: (process.env.MAIL_FROM_NAME ? process.env.MAIL_FROM_NAME + " <" : "") + (process.env.MAIL_FROM || process.env.MAIL_USER) + (process.env.MAIL_FROM_NAME ? ">" : ""),
-      to,
-      subject,
-      html
-    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || ("Brevo HTTP " + res.status));
+    return data;
   };
-} catch (e) {
-  console.log("  [aviso] nodemailer no disponible; el envío de correos quedará desactivado.");
+} else {
+  try {
+    const nodemailer = require("nodemailer");
+    sendMail = (to, subject, html) => {
+      const transporter = nodemailer.createTransport({
+        host: process.env.MAIL_HOST || "tasador.investamype.com",
+        port: parseInt(process.env.MAIL_PORT || "465", 10),
+        secure: true,
+        auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS }
+      });
+      return transporter.sendMail({
+        from: (MAIL_FROM_NAME ? MAIL_FROM_NAME + " <" : "") + MAIL_FROM + (MAIL_FROM_NAME ? ">" : ""),
+        to,
+        subject,
+        html
+      });
+    };
+  } catch (e) {
+    console.log("  [aviso] nodemailer no disponible; el envío de correos quedará desactivado.");
+  }
 }
 
 const { getEnvironmentProfile } = require("./environment");
@@ -66,15 +93,8 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
-  const allowedOrigins = new Set([
-    "https://investamype.com",
-    "https://www.investamype.com",
-    "https://tasador.investamype.com"
-  ]);
   const requestOrigin = req.headers.origin;
-  const corsOrigin = allowedOrigins.has(requestOrigin)
-    ? requestOrigin
-    : "https://investamype.com";
+  const corsOrigin = requestOrigin || "*";
   const corsHeaders = {
     "Access-Control-Allow-Origin": corsOrigin,
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",

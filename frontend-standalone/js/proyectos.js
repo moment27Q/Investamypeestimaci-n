@@ -183,7 +183,7 @@
       const timer = setTimeout(() => ctrl.abort(), 90000);
       let res;
       try {
-        res = await fetch("/api/nexo?" + p.toString(), { signal: ctrl.signal });
+        res = await fetch(apiUrl("/api/nexo?" + p.toString()), { signal: ctrl.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -310,7 +310,7 @@
     els.lmSource.textContent = "Nexo Inmobiliario · proyecto nuevo";
     renderModal(p, null);
     if (p.url) {
-      fetch("/api/listing-detail?url=" + encodeURIComponent(p.url))
+      fetch(apiUrl("/api/listing-detail?url=" + encodeURIComponent(p.url)))
         .then((res) => res.json())
         .then((d) => {
           if (els.listingModal.classList.contains("hidden")) return;
