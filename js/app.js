@@ -129,6 +129,7 @@
     rentRest: [],
     envProfile: null,
     areaTouched: false,
+    dirty: false,
     tasado: false,
     loading: false,
     runSeq: 0,
@@ -233,10 +234,7 @@
     } else {
       setPropertyPhotoStatus(count + " de " + MAX_PROPERTY_PHOTOS + " foto(s) añadida(s).", false);
     }
-    if (state.tasado) {
-      recompute();
-      fetchPropertyPhotos();
-    }
+    if (state.tasado) markDirty();
   }
 
   if (els.propertyPhotos) {
@@ -262,7 +260,7 @@
       setPropertyPhotoStatus(state.photos.length
         ? state.photos.length + " de " + MAX_PROPERTY_PHOTOS + " foto(s) añadida(s)."
         : "Puedes añadir hasta 4 fotos en JPG, PNG o WebP.", false);
-      if (state.tasado) recompute();
+      if (state.tasado) markDirty();
     });
   }
 
@@ -525,6 +523,84 @@
     if (empty) empty.classList.remove("hidden");
     if (els.loadingPanel) els.loadingPanel.classList.add("hidden");
     state.loading = false;
+    if (els.resultCard) els.resultCard.classList.remove("stale");
+  }
+
+  /* Los datos cambiaron: NO se retasa automáticamente; hay que pulsar Tasar. */
+  function markDirty() {
+    if (!state.tasado) return;
+    state.dirty = true;
+    state.descAdj = null;
+    state.photoAdj = null;
+    hideAllResults();
+    const empty = document.querySelector(".empty-state");
+    if (empty) {
+      const p = empty.querySelector("p");
+      if (p) p.innerHTML = "Cambiaste la ubicación o las características.<br>Presiona <b>Tasar</b> para recalcular tu tasación.";
+      empty.classList.remove("hidden");
+    }
+    if (els.resultCard) els.resultCard.classList.add("stale");
+    showStatus("Cambios detectados. Presiona “Tasar” para recalcular.", false, true);
+  }
+
+  /* Campos de características obligatorios según el tipo de inmueble.
+     min === 1: el valor 0 no cuadra (área, dormitorios, baños, antigüedad). */
+  const CHARACTERISTIC_FIELDS = [
+    { el: () => els.areaVal, label: () => (activeType() === "terreno" ? "Área del terreno" : "Área construida"), types: "departamento casa terreno local oficina", min: 1 },
+    { el: () => els.dorm, label: () => "Dormitorios", types: "departamento casa", min: 1 },
+    { el: () => els.bano, label: () => "Baños", types: "departamento casa", min: 1 },
+    { el: () => els.edad, label: () => "Antigüedad", types: "departamento casa local oficina", min: 1 },
+    { el: () => els.piso, label: () => "Piso / planta", types: "departamento oficina" },
+    { el: () => els.totalFloors, label: () => "N° total de pisos del edificio", types: "departamento" },
+    { el: () => els.maintenance, label: () => "Mantenimiento mensual", types: "departamento" },
+    { el: () => els.terrenoAreaVal, label: () => "Área del terreno", types: "casa", min: 1 },
+    { el: () => els.casaFloors, label: () => "N° de pisos de la casa", types: "casa" }
+  ];
+
+  function activeType() {
+    const active = document.querySelector(".type-btn.active");
+    return active ? active.dataset.type : "departamento";
+  }
+
+  function findMissingCharacteristic() {
+    const type = activeType();
+    for (const f of CHARACTERISTIC_FIELDS) {
+      if (!f.types.split(" ").includes(type)) continue;
+      const el = f.el();
+      if (!el) continue;
+      const wrap = el.closest(".field");
+      if (wrap && wrap.classList.contains("hidden")) continue;
+      const raw = String(el.value || "").trim();
+      const num = parseFloat(raw);
+      if (raw === "" || isNaN(num)) return { el, label: f.label(), kind: "missing" };
+      if (f.min === 1 && num < 1) return { el, label: f.label(), kind: "zero" };
+    }
+    return null;
+  }
+
+  function warnMissingField(missing) {
+    const msg = missing.kind === "zero"
+      ? "El valor de " + missing.label + " no puede ser 0. Ajusta el dato para que el cálculo cuadre."
+      : "Falta completar el campo: " + missing.label + ".";
+    showStatus(msg, true, true);
+    alert(msg);
+    const el = missing.el;
+    if (el) {
+      const field = el.closest(".field") || el;
+      field.classList.add("invalid");
+      el.classList.add("invalid");
+      const once = function () {
+        field.classList.remove("invalid");
+        el.classList.remove("invalid");
+        el.removeEventListener("input", once);
+        el.removeEventListener("change", once);
+      };
+      el.addEventListener("input", once);
+      el.addEventListener("change", once);
+      const card = el.closest(".card");
+      if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(function () { el.focus(); }, 350);
+    }
   }
 
   function runValuation() {
@@ -540,11 +616,61 @@
       if (photoCard) photoCard.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    const missing = findMissingCharacteristic();
+    if (missing) {
+      warnMissingField(missing);
+      return;
+    }
     openLeadModal();
+  }
+
+  /* Datos de contacto ya confirmados (localStorage): no volver a pedir el formulario */
+  const LEAD_STORAGE_KEY = "tasadorLeadV1";
+
+  function getSavedLead() {
+    try {
+      const raw = localStorage.getItem(LEAD_STORAGE_KEY);
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (d && d.name && d.lastName && d.email && d.phone) return d;
+      return null;
+    } catch (e) { return null; }
+  }
+
+  function saveLead(data) {
+    try { localStorage.setItem(LEAD_STORAGE_KEY, JSON.stringify(data)); } catch (e) { /* se ignora */ }
+  }
+
+  function leadPayload(lead) {
+    return {
+      _subject: "Nueva tasación solicitada — " + lead.name + " " + lead.lastName,
+      _template: "table",
+      _replyto: lead.email,
+      Nombre: lead.name,
+      Apellido: lead.lastName,
+      Correo: lead.email,
+      Telefono: lead.phone,
+      Direccion: lead.address || (state.location && (state.location.display || state.location.address)) || ""
+    };
+  }
+
+  /* Reenvío silencioso con datos ya guardados (no interrumpe al usuario) */
+  function sendLeadQuietly(lead) {
+    fetch("https://formsubmit.co/ajax/contacto@tasador.investamype.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(leadPayload(lead))
+    }).catch(() => {});
   }
 
   function openLeadModal() {
     if (!els.leadModal) { startValuation(); return; }
+    const saved = getSavedLead();
+    if (saved) {
+      sendLeadQuietly(saved);
+      startValuation();
+      return;
+    }
     els.leadForm.reset();
     const loc = state.location;
     if (els.leadAddress && loc) {
@@ -596,16 +722,13 @@
     els.leadSubmit.textContent = "Enviando…";
     setLeadStatus("", null);
 
-    const data = {
-      _subject: "Nueva tasación solicitada — " + name + " " + lastName,
-      _template: "table",
-      _replyto: email,
-      Nombre: name,
-      Apellido: lastName,
-      Correo: email,
-      Telefono: phone,
-      Direccion: address
-    };
+    const data = leadPayload({
+      name: name,
+      lastName: lastName,
+      email: email,
+      phone: phone,
+      address: address
+    });
 
     fetch("https://formsubmit.co/ajax/contacto@tasador.investamype.com", {
       method: "POST",
@@ -616,6 +739,7 @@
       .then(({ ok, json }) => {
         const success = json && (json.success === "true" || json.success === true);
         if (!ok && !success) throw new Error("No se pudo enviar el correo.");
+        saveLead({ name, lastName, email, phone });
         setLeadStatus("Datos enviados. Calculando tu tasación…", "ok");
         setTimeout(() => {
           closeLeadModal();
@@ -641,12 +765,14 @@
   function startValuation() {
     const runId = ++state.runSeq;
     state.tasado = true;
+    state.dirty = false;
     state.market = null;
     state.rentMarket = null;
     state.envProfile = null;
     state.marketDone = false;
     state.rentDone = false;
     state.envDone = false;
+    if (els.resultCard) els.resultCard.classList.remove("stale");
     setLoading(true);
     saveSnapshot();
     Promise.allSettled([
@@ -724,12 +850,7 @@
       document.querySelectorAll(".type-btn").forEach((x) => x.classList.remove("active"));
       b.classList.add("active");
       renderFields();
-      if (state.tasado) {
-        recompute();
-        fetchMarket();
-        fetchRentals();
-        fetchEnvironment();
-      }
+      if (state.tasado) markDirty();
     });
   });
 
@@ -780,7 +901,7 @@
     range.addEventListener("input", () => {
       if (inp === "area") state.areaTouched = true;
       setVal(els[val], range.value, fmt);
-      recompute();
+      markDirty();
     });
   });
 
@@ -796,7 +917,7 @@
       const sMax = parseFloat(rangeEl.max);
       rangeEl.value = v < sMin ? sMin : v > sMax ? sMax : v;
       if (touchedKey === "area") state.areaTouched = true;
-      recompute();
+      markDirty();
     });
   });
 
@@ -806,11 +927,11 @@
     els.shape, els.topography, els.fence, els.zoning, els.services,
     els.corner, els.urbanization, els.road
   ].forEach((el) => {
-    el.addEventListener("input", recompute);
-    el.addEventListener("change", recompute);
+    el.addEventListener("input", markDirty);
+    el.addEventListener("change", markDirty);
   });
 
-  els.zona.addEventListener("change", recompute);
+  els.zona.addEventListener("change", markDirty);
 
   els.casaFloors.addEventListener("input", () => {
     const v = parseInt(els.casaFloors.value, 10);
@@ -830,7 +951,7 @@
         b.classList.toggle("active", b === btn)
       );
       els.parking.value = btn.dataset.parking;
-      recompute();
+      markDirty();
     });
   }
 
@@ -1758,7 +1879,7 @@
     els.descripcion.addEventListener("input", () => {
       clearTimeout(descDebounce);
       descDebounce = setTimeout(() => {
-        if (state.tasado) fetchDescription();
+        if (state.tasado) markDirty();
       }, 800);
     });
   }
