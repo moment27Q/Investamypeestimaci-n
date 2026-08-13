@@ -119,7 +119,7 @@ function calcDepartamento(inputs, envFactor, refArea) {
   fr(rows, "ascensor", inputs.elevator === "si" ? "Con ascensor" : "Sin ascensor", elevatorFactor);
   fr(rows, "parqueo", "Estacionamiento (" + inputs.parking + ")", parkingFactor);
   fr(rows, "deposito", inputs.storage === "si" ? "Con depósito" : "Sin depósito", storageFactor);
-  fr(rows, "vista", "Vista " + inputs.view, viewFactor);
+  if (inputs.view) fr(rows, "vista", "Vista " + inputs.view, viewFactor);
   fr(rows, "acabados", "Acabados " + inputs.finishes, finishesFactor);
   fr(rows, "amenities", "Amenities " + inputs.amenities, amenitiesFactor);
   fr(rows, "regimen", "Régimen " + inputs.regime, regimeFactor);
@@ -407,7 +407,7 @@ function computeValuation(location, inputs, market, envProfile, descAdj, photoAd
     ? clamp(descAdj.factor, 0.85, 1.15)
     : 1;
   const photoFactor = photoAdj && photoAdj.used && photoAdj.factor != null
-    ? clamp(photoAdj.factor, 0.92, 1.08)
+    ? clamp(photoAdj.factor, 0.85, 1.15)
     : 1;
 
   const type = inputs.type || "departamento";

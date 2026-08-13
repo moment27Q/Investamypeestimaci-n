@@ -123,7 +123,9 @@ async function inferAdjustment(ctx) {
     "(ej. vista al mar, remodelación integral reciente, certificación, seguridad 24h, cochera, zonas comunes amplias, expropiación o ruido).\n" +
     "- Si la descripción está vacía, es genérica o no aporta nada adicional, used=false y factor=1.\n" +
     "- Ignora afirmaciones subjetivas o sin sustento (ej. «es la mejor casa del barrio», «tiene un valor incalculable»).\n" +
-    "- factor: ajuste multiplicativo conservador al valor estimado (1.0 = sin cambio). Máximo ±10% (0.90 a 1.10).\n" +
+    "- factor: ajuste multiplicativo al valor estimado (1.0 = sin cambio). Rango permitido 0.85 a 1.15 (±15%).\n" +
+    "  Sube el factor cuando la descripción revele atributos valiosos (vista, remodelación, seguridad, cochera, exclusividad de la zona); " +
+    "bájalo cuando revele problemas que restan valor (humedad, ruido, antigüedad, mantenimiento pendiente, cercanía a zonas conflictivas).\n" +
     "- summary: el atributo clave detectado en una frase corta. rationale: por qué sube o baja el valor.";
 
   const payload = {
@@ -153,7 +155,7 @@ async function getDescriptionAdjustment(ctx) {
   }
   try {
     const parsed = await inferAdjustment(ctx);
-    const factor = clamp(parseFloat(parsed.factor) || 1, 0.9, 1.1);
+    const factor = clamp(parseFloat(parsed.factor) || 1, 0.85, 1.15);
     const used = parsed.used !== false && factor !== 1;
     return {
       enabled: true,

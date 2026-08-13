@@ -200,8 +200,16 @@ async function analyzePhotos(loc, images) {
 
 function buildValuationAnalysis(raw) {
   const condition = pick(raw, ["condition", "condicion", "estado"], "bueno").toLowerCase();
-  const finishes = pick(raw, ["finishes", "acabados"], "intermedio").toLowerCase();
-  const factor = Math.max(0.92, Math.min(1.08, Number(raw.factor) || 1));
+  let finishes = pick(raw, ["finishes", "acabados"], "intermedio").toLowerCase();
+  const factor = Math.max(0.85, Math.min(1.15, Number(raw.factor) || 1));
+  const interiorVisible = raw.interiorVisible === true ||
+    ["si", "true", "1"].includes(String(raw.interiorVisible).toLowerCase());
+  if (!interiorVisible) finishes = "intermedio";
+  let observations = String(pick(raw, ["observaciones", "observacion", "notas"], "")).slice(0, 400);
+  if (!interiorVisible) {
+    observations = (observations ? observations + " " : "") +
+      "Las fotos no muestran el interior; los acabados se tomaron como intermedio.";
+  }
   return {
     enabled: true,
     used: true,
@@ -209,7 +217,8 @@ function buildValuationAnalysis(raw) {
     factor: Math.round(factor * 1000) / 1000,
     condition: ["excelente", "bueno", "regular", "renovar"].includes(condition) ? condition : "bueno",
     finishes: ["premium", "intermedio", "basico"].includes(finishes) ? finishes : "intermedio",
-    observations: String(pick(raw, ["observaciones", "observacion", "notas"], "")).slice(0, 400),
+    interiorVisible: interiorVisible,
+    observations: observations.slice(0, 400),
     rationale: String(pick(raw, ["rationale", "razon", "justificacion"], "")).slice(0, 280),
     analyzedAt: new Date().toISOString()
   };
@@ -229,14 +238,19 @@ async function inferValuationVision(loc, images, inputs) {
   const system =
     "Eres un tasador inmobiliario peruano experto en inspección visual de inmuebles. " +
     "Analiza exclusivamente evidencias visibles en fotografías; no inventes atributos, medidas, ubicación, daños ocultos ni condición estructural. " +
-    "El factor debe ser muy conservador: úsalo solo por estado visible y acabados frente a lo declarado; 1 significa sin ajuste. " +
+    "Compara el estado y acabados que VES con lo declarado y decide un ajuste claro: si la propiedad se ve claramente mejor (renovada, impecable, acabados premium) sube el factor; si se ve peor (deterioro, humedad visible, muebles/grietas, acabados básicos) bájalo. " +
+    "El factor 1 significa sin ajuste. Solo usa los extremos cuando la evidencia visual sea evidente. " +
+    "Los acabados (finishes) solo pueden clasificarse si al menos una foto muestra el INTERIOR del inmueble (sala, cocina, baños, dormitorios); si ninguna foto muestra el interior, finishes debe ser intermedio e interiorVisible false. " +
     "Responde SOLO JSON válido: " +
-    '{"factor":0.92-1.08,"condition":"excelente|bueno|regular|renovar","finishes":"premium|intermedio|basico","observaciones":"texto breve","rationale":"motivo breve del ajuste"}';
+    '{"factor":0.85-1.15,"condition":"excelente|bueno|regular|renovar","finishes":"premium|intermedio|basico","interiorVisible":true,"observaciones":"texto breve","rationale":"motivo breve del ajuste"}';
   const user =
     "Contexto de la propiedad: " + context + "\n" +
-    "Revisa las fotos. Devuelve factor entre 0.92 y 1.08, con 1.00 si no hay evidencia suficiente. " +
-    "Un factor positivo solo corresponde a acabados o conservación claramente superiores; uno negativo a desgaste, deterioro o acabados claramente inferiores. " +
-    "Las observaciones deben describir únicamente lo visible y el motivo debe explicar el factor.";
+    "Revisa las fotos. Devuelve factor entre 0.85 y 1.15, con 1.00 si no hay evidencia suficiente. " +
+    "Sube el factor si la condición y acabados visibles son claramente superiores a lo declarado o a la media; " +
+    "bájalo si hay desgaste, deterioro, humedad, pintura descascarada, grietas o acabados claramente inferiores. " +
+    "condition: clasifica el estado visible. finishes: clasifica los acabados visibles (SOLO si se ve el interior). " +
+    "interiorVisible: true si alguna foto muestra el interior del inmueble; false si todas las fotos son exteriores o no muestran ambientes interiores. " +
+    "Las observaciones deben describir únicamente lo visible y el rationale debe explicar el factor.";
   const content = [{ type: "text", text: user }];
   images.slice(0, 4).forEach((u) => content.push({ type: "image_url", image_url: { url: u } }));
   const payload = {

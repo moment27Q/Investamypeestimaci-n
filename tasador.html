@@ -146,16 +146,17 @@
           </div>
           <div class="field" data-types="departamento casa terreno local oficina">
             <label>Zona dentro del distrito</label>
-            <select id="zona">
+            <select id="zona" class="hidden">
               <option value="auto" selected>Auto (calculada)</option>
               <option value="premium">Premium / frente al mar / exclusiva</option>
               <option value="central">Céntrica / consolidada</option>
               <option value="normal">Zona residencial estándar</option>
               <option value="periferia">Periférica / en expansión</option>
             </select>
-            <p class="field-help">Ubicación exacta de tu inmueble dentro del distrito. Ajusta el precio por m²:
-              <b>Auto</b> usa la zona del distrito detectado · <b>Premium</b> (frente al mar, exclusiva) +3% ·
-              <b>Céntrica</b> +1,5% · <b>Estándar</b> sin cambio · <b>Periférica</b> −4%.</p>
+            <div class="ai-zone-value" id="zonaValue">Esperando ubicación…</div>
+            <p class="field-help">Este campo lo determina la IA según la ubicación del inmueble y no se puede modificar.
+              <b>Premium</b> (frente al mar, exclusiva) +3% · <b>Céntrica</b> +1,5% ·
+              <b>Estándar</b> sin cambio · <b>Periférica</b> −4%.</p>
           </div>
         </div>
 
@@ -174,11 +175,13 @@
           </div>
           <div class="field" data-types="departamento casa">
             <label>Estacionamiento</label>
-            <select id="parking">
-              <option value="0">Sin estacionamiento</option>
-              <option value="1" selected>1</option>
-              <option value="2">2</option>
-              <option value="3">3 o más</option>
+            <div class="btn-toggle" id="parkingToggle" role="group" aria-label="Estacionamiento">
+              <button type="button" class="btn-toggle-btn active" data-parking="0">Sin estacionamiento</button>
+              <button type="button" class="btn-toggle-btn" data-parking="1">Con estacionamiento</button>
+            </div>
+            <select id="parking" class="hidden">
+              <option value="0" selected>Sin estacionamiento</option>
+              <option value="1">Con estacionamiento</option>
             </select>
           </div>
           <div class="field" data-types="departamento">
@@ -188,21 +191,15 @@
               <option value="si">Sí</option>
             </select>
           </div>
-          <div class="field" data-types="departamento">
-            <label>Vista</label>
-            <select id="view">
-              <option value="none" selected>No especificada</option>
-              <option value="exterior">Exterior</option>
-              <option value="interior">Interior</option>
-            </select>
-          </div>
           <div class="field" data-types="departamento casa">
             <label>Acabados</label>
-            <select id="finishes">
+            <select id="finishes" class="hidden">
               <option value="basico">Básico</option>
               <option value="intermedio" selected>Intermedio</option>
               <option value="premium">Premium</option>
             </select>
+            <div class="ai-zone-value" id="finishesValue">Pendiente de foto del interior…</div>
+            <p class="field-help">Determinados por la IA a partir de la foto del interior de la propiedad · no se pueden modificar.</p>
           </div>
           <div class="field" data-types="departamento">
             <label>Áreas comunes / amenities</label>
@@ -339,7 +336,7 @@
 
         <div class="field property-photos">
           <div class="label-row">
-            <label for="propertyPhotos">Fotos de la propiedad <span class="photo-hint">Opcional · máximo 4</span></label>
+            <label for="propertyPhotos">Foto del interior de la propiedad <span class="photo-hint">Obligatorio · mínimo 1</span></label>
           </div>
           <div class="photo-zone">
             <label class="photo-pick" for="propertyPhotos">
@@ -348,7 +345,7 @@
             </label>
             <input id="propertyPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
             <div class="photo-previews" id="propertyPhotoPreviews" aria-live="polite"></div>
-            <p class="photo-status" id="propertyPhotoStatus">Puedes añadir hasta 4 fotos en JPG, PNG o WebP.</p>
+            <p class="photo-status" id="propertyPhotoStatus">Sube al menos 1 foto del interior (máximo 4) para que la IA determine los acabados.</p>
             <div class="desc-note hidden" id="propertyPhotoNote"></div>
           </div>
         </div>
@@ -376,6 +373,12 @@
           <div class="empty-state">
             <div class="empty-ic">◧</div>
             <p>Completa la ubicación y las características de la propiedad,<br>luego presiona <b>Tasar</b> para ver la tasación estimada.</p>
+          </div>
+
+          <div class="loading-panel hidden" id="loadingPanel">
+            <div class="spinner"></div>
+            <p class="lp-title">Calculando tu tasación…</p>
+            <p class="lp-sub">Obteniendo precios de mercado en vivo, alquiler, entorno con IA y análisis de tus datos. Esto puede tardar entre 20 y 60 segundos.</p>
           </div>
 
           <div class="price-block hidden">

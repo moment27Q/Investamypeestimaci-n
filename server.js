@@ -29,6 +29,7 @@ const { getEnvironmentProfile } = require("./environment");
 const { getDescriptionAdjustment } = require("./descripcion");
 const { getAdvisory } = require("./asesor");
 const { analyzePhotos, analyzeValuationPhotos } = require("./vision");
+const { validateLocation } = require("./ubicacion");
 const geocoder = require("./geocoder");
 
 const ROOT = __dirname;
@@ -140,6 +141,30 @@ const server = http.createServer((req, res) => {
       .catch((e) => {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
+      });
+    return;
+  }
+
+  if (parsed.pathname === "/api/validate-location") {
+    const q = parsed.query;
+    const loc = {
+      lat: q.lat != null ? parseFloat(q.lat) : null,
+      lon: q.lon != null ? parseFloat(q.lon) : null,
+      district: q.district || null,
+      city: q.city || null,
+      address: q.address || null
+    };
+    validateLocation(loc)
+      .then((data) => {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store"
+        });
+        res.end(JSON.stringify(data));
+      })
+      .catch((e) => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ enabled: false, valid: null, reason: e.message }));
       });
     return;
   }
