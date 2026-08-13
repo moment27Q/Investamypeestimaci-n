@@ -113,7 +113,8 @@ function cacheKey(ctx) {
   return [
     ctx.district || "", ctx.city || "",
     Math.round(ctx.landArea || 0), ctx.zoning || "",
-    Math.round(ctx.budget || 0), ctx.objective || "", ctx.mode || ""
+    Math.round(ctx.budget || 0), ctx.objective || "", ctx.mode || "",
+    String(ctx.objetivo || "")
   ].join("::");
 }
 
@@ -142,10 +143,14 @@ async function inferAdvisory(ctx) {
     "- Presupuesto en efectivo del usuario: " + money(ctx.budget) + "\n" +
     "- Objetivo del usuario: " +
     ({ venta: "vender con la mayor ganancia", renta: "generar renta mensual", equilibrio: "equilibrio entre ganancia y rapidez" }[ctx.objective] || ctx.objective) + "\n" +
+    (ctx.objetivo ? "- Plan del usuario (en sus propias palabras): \"" + String(ctx.objetivo).slice(0, 1000) + "\"\n" : "") +
     "- Modo que está evaluando: " + ctx.mode + "\n" +
     (ctx.fotoAnalisis ? "- Análisis de las fotos del predio: " + ctx.fotoAnalisis + "\n" : "") +
     "\n" +
-    "Indica el mejorModo priorizando el beneficio neto del usuario según su objetivo. Si su presupuesto en efectivo " +
+    "Indica el mejorModo priorizando el beneficio neto del usuario según su objetivo Y su plan descrito en sus propias palabras: " +
+    "si quiere construir y vender rápido, preferir constructora; si no tiene efectivo o no quiere gestionar la obra, " +
+    "preferir inmobiliaria; si quiere el mayor margen y puede dedicarle tiempo, preferir albañil. " +
+    "Si su presupuesto en efectivo " +
     "no alcanza el costo de albañil o constructora, recomienda inmobiliaria. En argumentos, da frases concretas y firmes " +
     "que el usuario pueda decir en la negociación PARA SU BENEFICIO (por ejemplo, anclar el % que le corresponde, exigir " +
     "costo de obra auditado, penalidades por atraso, etc.). En clausulas, incluye cláusulas de penalidad por retraso, " +

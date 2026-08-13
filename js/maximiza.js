@@ -10,16 +10,20 @@
     map: $("map"),
     mapStatus: $("mapStatus"),
     zoneLabel: $("zoneLabel"),
+    zoneLabelSub: $("zoneLabelSub"),
+    formPanel: $("formPanel"),
     landArea: $("landArea"),
     landAreaVal: $("landAreaVal"),
     zoning: $("zoning"),
     budget: $("budget"),
     budgetVal: $("budgetVal"),
     objective: $("objective"),
+    objetivo: $("objetivo"),
     modeGrid: $("modeGrid"),
     calcBtn: $("calcBtn"),
     calcHint: $("calcHint"),
     results: $("results"),
+    resultsEmpty: $("resultsEmpty"),
     sumLand: $("sumLand"),
     sumLandZone: $("sumLandZone"),
     sumBuilt: $("sumBuilt"),
@@ -88,6 +92,10 @@
     map.setView([lat, lon], Math.max(map.getZoom(), 14));
   }
 
+  function showPanel() {
+    if (els.formPanel) els.formPanel.classList.remove("hidden");
+  }
+
   async function applyReverse(lat, lon) {
     try {
       var place = await GEO.reverse(lat, lon);
@@ -96,10 +104,12 @@
       setMarker(lat, lon);
       var pretty = GEO.formatAddress(place.address, place.display_name);
       els.addressInput.value = pretty;
-      els.zoneLabel.textContent = (loc.district || loc.city || "Ubicación") + " · " + pretty;
+      els.zoneLabel.textContent = loc.district || loc.city || "Ubicación";
+      els.zoneLabelSub.textContent = pretty;
       els.zoneLabel.classList.add("set");
       els.mapStatus.textContent = pretty;
       els.mapStatus.classList.remove("hidden");
+      showPanel();
       calc();
     } catch (e) {
       els.mapStatus.textContent = "No se pudo geocodificar ese punto.";
@@ -146,7 +156,8 @@
       landArea: landArea || 200,
       zoning: els.zoning.value,
       budget: parseFloat(els.budget.value) || 0,
-      objective: els.objective.value,
+      objective: els.objective ? els.objective.value : "equilibrio",
+      objetivo: els.objetivo ? els.objetivo.value.trim().slice(0, 1000) : "",
       mode: state.mode,
       share: 50
     };
@@ -558,6 +569,7 @@
       zoning: inputs.zoning,
       budget: inputs.budget,
       objective: inputs.objective,
+      objetivo: inputs.objetivo,
       mode: inputs.mode,
       salePerM2: Math.round(r.salePerM2),
       landValue: r.landValue,
@@ -605,6 +617,7 @@
     fetchAI(r, inputs);
     if (fromButton || state.resultsShown) {
       state.resultsShown = true;
+      if (els.resultsEmpty) els.resultsEmpty.classList.add("hidden");
       els.results.classList.remove("hidden");
       els.results.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -822,10 +835,12 @@
     state.location = loc;
     setMarker(loc.lat, loc.lon);
     els.addressInput.value = GEO.formatAddress(place.address, place.display_name || place.name || "");
-    els.zoneLabel.textContent = (loc.district || loc.city || "Ubicación detectada") + " · " + (place.display_name || "");
+    els.zoneLabel.textContent = loc.district || loc.city || "Ubicación";
+    els.zoneLabelSub.textContent = GEO.formatAddress(place.address, place.display_name || place.name || "");
     els.zoneLabel.classList.add("set");
     els.mapStatus.textContent = GEO.formatAddress(place.address, place.display_name || place.name || "");
     els.mapStatus.classList.remove("hidden");
+    showPanel();
     calc();
   }
 
@@ -843,8 +858,10 @@
       };
       if (loc.lat != null && loc.lon != null) setMarker(loc.lat, loc.lon);
       els.addressInput.value = loc.display || (loc.district || loc.city || "");
-      els.zoneLabel.textContent = (loc.district || loc.city || "Ubicación") + " · datos de tu tasación";
+      els.zoneLabel.textContent = loc.district || loc.city || "Ubicación";
+      els.zoneLabelSub.textContent = "Datos de tu tasación: " + (loc.display || "");
       els.zoneLabel.classList.add("set");
+      showPanel();
       if (snap.inputs && snap.inputs.type === "terreno") {
         var a = parseFloat(snap.inputs.area);
         if (a) {
@@ -882,7 +899,8 @@
     els.budgetVal.textContent = "S/ " + fmt(parseFloat(els.budget.value));
   });
   els.zoning.addEventListener("change", calc);
-  els.objective.addEventListener("change", calc);
+  if (els.objective) els.objective.addEventListener("change", calc);
+  if (els.objetivo) els.objetivo.addEventListener("change", calc);
 
   els.modeGrid.addEventListener("click", function (e) {
     var card = e.target.closest(".mode-card");

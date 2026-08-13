@@ -298,6 +298,7 @@ const server = http.createServer((req, res) => {
       zoning: q.zoning || "otro",
       budget: f(q.budget, 0),
       objective: q.objective || "venta",
+      objetivo: String(q.objetivo || "").slice(0, 1000),
       mode: q.mode || "todas",
       salePerM2: f(q.salePerM2, 0),
       landValue: f(q.landValue, 0),
