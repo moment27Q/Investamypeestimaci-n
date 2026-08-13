@@ -1,22 +1,42 @@
 const GEO = {
   async search(query) {
-    const res = await fetch(apiUrl("/api/geocode?q=" + encodeURIComponent(query)), {
-      headers: { "Accept": "application/json" }
-    });
-    if (!res.ok) throw new Error("Geocoder HTTP " + res.status);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    return data || [];
+    try {
+      const res = await fetch(apiUrl("/api/geocode?q=" + encodeURIComponent(query)), {
+        headers: { "Accept": "application/json" }
+      });
+      if (!res.ok) throw new Error("Geocoder HTTP " + res.status);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data || [];
+    } catch (backendError) {
+      const res = await fetch(
+        "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=pe&limit=8&accept-language=es&q=" +
+        encodeURIComponent(query)
+      );
+      if (!res.ok) throw backendError;
+      return await res.json();
+    }
   },
 
   async reverse(lat, lon) {
-    const res = await fetch(apiUrl("/api/reverse?lat=" + lat + "&lon=" + lon), {
-      headers: { "Accept": "application/json" }
-    });
-    if (!res.ok) throw new Error("Geocoder HTTP " + res.status);
-    const data = await res.json();
-    if (data.error || !data.lat) throw new Error(data.error || "Sin resultado");
-    return data;
+    try {
+      const res = await fetch(apiUrl("/api/reverse?lat=" + lat + "&lon=" + lon), {
+        headers: { "Accept": "application/json" }
+      });
+      if (!res.ok) throw new Error("Geocoder HTTP " + res.status);
+      const data = await res.json();
+      if (data.error || !data.lat) throw new Error(data.error || "Sin resultado");
+      return data;
+    } catch (backendError) {
+      const res = await fetch(
+        "https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&accept-language=es&lat=" +
+        encodeURIComponent(lat) + "&lon=" + encodeURIComponent(lon)
+      );
+      if (!res.ok) throw backendError;
+      const data = await res.json();
+      if (!data || !data.lat) throw backendError;
+      return data;
+    }
   },
 
   formatAddress(a, name) {

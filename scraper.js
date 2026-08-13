@@ -15,6 +15,19 @@ const TYPE_SLUG = {
 
 let browserPromise = null;
 let lastScrapeAt = 0;
+let scraperQueue = Promise.resolve();
+
+/*
+ * Render free tiene memoria limitada. La tasación solicita venta y alquiler a
+ * la vez; si ambos lanzan pestañas de Chromium junto con RE/MAX, el proceso
+ * puede quedarse sin memoria. Serializamos los trabajos de scraping para que
+ * el navegador nunca ejecute varios lotes simultáneos.
+ */
+function enqueueScrape(task) {
+  const next = scraperQueue.then(task, task);
+  scraperQueue = next.catch(() => {});
+  return next;
+}
 
 function getBrowser() {
   if (!browserPromise) {
@@ -281,14 +294,14 @@ function parseRentCardText(text) {
 async function scrapePage(browser, url) {
   const page = await newStealthPage(browser);
   try {
-    const ok = await navigate(page, url, 40000);
+    const ok = await navigate(page, url, 25000);
     if (!ok) return [];
     await page.waitForTimeout(1500);
 
     // Scroll para cargar avisos perezosos
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 5; i++) {
       await page.mouse.wheel(0, 2500);
-      await page.waitForTimeout(700);
+      await page.waitForTimeout(550);
     }
 
     const cards = await page.evaluate(() => {
@@ -341,13 +354,13 @@ async function scrapePage(browser, url) {
 async function scrapeRentPage(browser, url) {
   const page = await newStealthPage(browser);
   try {
-    const ok = await navigate(page, url, 40000);
+    const ok = await navigate(page, url, 25000);
     if (!ok) return [];
     await page.waitForTimeout(1500);
 
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 5; i++) {
       await page.mouse.wheel(0, 2500);
-      await page.waitForTimeout(700);
+      await page.waitForTimeout(550);
     }
 
     const cards = await page.evaluate(() => {
@@ -609,7 +622,7 @@ async function getComparables(query) {
     return IN_FLIGHT.get(cacheKey);
   }
 
-  const run = (async () => {
+  const run = enqueueScrape(async () => {
     // Espaciar peticiones para respetar los portales
     const wait = Math.max(0, 2500 - (now - lastScrapeAt));
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
@@ -621,10 +634,11 @@ async function getComparables(query) {
     }
 
     const urls = buildUrls(query);
-    const results = await Promise.all([
-      ...urls.map((u) => scrapePage(browser, u.url).then((list) => ({ site: u.site, list }))),
-      scrapeRemax(browser, query).then((list) => ({ site: "remax", list }))
-    ]);
+    // Solo Urbania y Adondevivir: RE/MAX abre pestañas adicionales por cada
+    // aviso y hacía que el proceso excediera la memoria disponible en Render.
+    const results = await Promise.all(
+      urls.map((u) => scrapePage(browser, u.url).then((list) => ({ site: u.site, list })))
+    );
 
     const all = [];
     for (const r of results) all.push(...r.list);
@@ -656,7 +670,7 @@ async function getComparables(query) {
       CACHE.set(cacheKey, { data, fetchedAt: now });
     }
     return data;
-  })();
+  });
 
   IN_FLIGHT.set(cacheKey, run);
   try {
@@ -677,7 +691,7 @@ async function getRentals(query) {
     return RENT_IN_FLIGHT.get(cacheKey);
   }
 
-  const run = (async () => {
+  const run = enqueueScrape(async () => {
     const wait = Math.max(0, 2500 - (now - lastScrapeAt));
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     lastScrapeAt = Date.now();
@@ -725,7 +739,7 @@ async function getRentals(query) {
       RENT_CACHE.set(cacheKey, { data, fetchedAt: now });
     }
     return data;
-  })();
+  });
 
   RENT_IN_FLIGHT.set(cacheKey, run);
   try {

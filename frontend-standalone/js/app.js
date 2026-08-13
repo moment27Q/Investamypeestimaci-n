@@ -370,7 +370,7 @@
       els.mapStatus.classList.remove("hidden");
       resetResults();
     } catch (e) {
-      showStatus("No se pudo geocodificar ese punto.");
+      showStatus("No se pudo geocodificar ese punto: " + (e && e.message ? e.message : "error de conexión") + ".");
     }
   }
 

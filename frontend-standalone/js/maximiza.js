@@ -101,7 +101,7 @@
       els.mapStatus.classList.remove("hidden");
       calc();
     } catch (e) {
-      els.mapStatus.textContent = "No se pudo geocodificar ese punto.";
+      els.mapStatus.textContent = "No se pudo geocodificar ese punto: " + (e && e.message ? e.message : "error de conexión") + ".";
       els.mapStatus.classList.remove("hidden");
     }
   }
