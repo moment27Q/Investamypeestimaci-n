@@ -10,19 +10,22 @@
 <body>
 
   <header class="topbar">
-    <div class="brand">
-      <span class="logo">◧</span>
-      <div>
-        <h1>Tasador <span>Perú</span></h1>
-        <p>Tasación automática en tiempo real</p>
-      </div>
-    </div>
+    <a class="brand" href="index.html" aria-label="Tasador Perú — inicio">
+      <span class="logo">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3 2.5 12h2.6v8h5.4v-5h3v5h5.4v-8h2.6L12 3z"/></svg>
+      </span>
+      <span class="brand-text">
+        <span class="brand-name">Tasador <b>Perú</b></span>
+        <span class="brand-tag">Tasación inmobiliaria en línea</span>
+      </span>
+    </a>
+    <nav class="nav" aria-label="Secciones">
+      <a class="nav-link" href="tasador.html" aria-current="page">Tasador</a>
+      <a class="nav-link" href="maximiza.html" id="maxLink">Maximiza</a>
+      <a class="nav-link" href="proyectos.html" id="nexoLink">Proyectos</a>
+    </nav>
     <div class="topbar-meta">
-      <span class="badge-live"><i></i> EN VIVO</span>
-      <span class="badge-data">Datos: Urbania · ASEI · BCRP</span>
-      <a class="badge-link" href="index.html" id="homeLink">← Inicio</a>
-      <a class="badge-link" href="maximiza.html" id="maxLink">Maximiza tu propiedad ↗</a>
-      <a class="badge-link" href="proyectos.html" id="nexoLink">Proyectos nuevos ↗</a>
+      <span class="live-dot"><i></i> En vivo · Urbania · ASEI · BCRP</span>
     </div>
   </header>
 
