@@ -54,8 +54,8 @@
   };
 
   var MODES = {
-    albañil:      { key: "albañil", label: "Con albañil", ic: "👷", sub: "Autoconstrucción gestionada por ti", costPerM2: 2300, overheadPct: 0.08, monthsPerM2: 42, extraMonths: 4 },
-    constructora: { key: "constructora", label: "Constructora", ic: "🏗️", sub: "Empresa constructora llave en mano", costPerM2: 3200, overheadPct: 0.06, monthsPerM2: 85, extraMonths: 5 },
+    albañil:      { key: "albañil", label: "Con albañil", ic: "👷", sub: "Autoconstrucción gestionada por ti", costPerM2: 3000, overheadPct: 0.10, monthsPerM2: 42, extraMonths: 4 },
+    constructora: { key: "constructora", label: "Constructora", ic: "🏗️", sub: "Empresa constructora llave en mano", costPerM2: 3700, overheadPct: 0.08, monthsPerM2: 85, extraMonths: 5 },
     inmobiliaria: { key: "inmobiliaria", label: "Inmobiliaria", ic: "🏢", sub: "Ellos construyen y venden; tu aporte es el terreno", costPerM2: 0, overheadPct: 0, monthsPerM2: 95, extraMonths: 14 }
   };
 
@@ -67,7 +67,8 @@
     aiLoading: false,
     photos: [],
     photoAnalysis: null,
-    analyzing: false
+    analyzing: false,
+    resultsShown: false
   };
 
   /* ---------------- Mapa ---------------- */
@@ -101,7 +102,7 @@
       els.mapStatus.classList.remove("hidden");
       calc();
     } catch (e) {
-      els.mapStatus.textContent = "No se pudo geocodificar ese punto: " + (e && e.message ? e.message : "error de conexión") + ".";
+      els.mapStatus.textContent = "No se pudo geocodificar ese punto.";
       els.mapStatus.classList.remove("hidden");
     }
   }
@@ -174,7 +175,7 @@
     var builtArea = Math.round(Math.min(inputs.landArea * z.far, inputs.landArea * z.floors));
     var landPerM2 = basePrice * 0.50 * landFactor;
     var landValue = Math.round(landPerM2 * inputs.landArea);
-    var salePerM2 = basePrice * 1.10 * (1 + envBonus);
+    var salePerM2 = basePrice * 1.05 * (1 + envBonus);
     var saleTotal = Math.round(salePerM2 * builtArea);
     var rentaTotal = Math.round(builtArea * rentBaseFromPrice(salePerM2) * 0.9);
     var share = inputs.share;
@@ -260,7 +261,6 @@
     renderReco(best, r);
     renderModes(r);
     renderAI(r, share);
-    els.results.classList.remove("hidden");
   }
 
   function renderReco(best, r) {
@@ -572,7 +572,7 @@
     try {
       var ctrl = new AbortController();
       var timer = setTimeout(function () { ctrl.abort(); }, 50000);
-      var res = await fetch(apiUrl("/api/maximiza?" + params.toString()), { signal: ctrl.signal });
+      var res = await fetch("/api/maximiza?" + params.toString(), { signal: ctrl.signal });
       clearTimeout(timer);
       var data = await res.json().catch(function () { return {}; });
       state.ai = (data && data.enabled) ? data : { enabled: false, reason: (data && data.reason) || "error" };
@@ -588,7 +588,7 @@
   }
 
   /* ---------------- Calcular ---------------- */
-  function calc() {
+  function calc(fromButton) {
     var loc = state.location;
     if (!loc) {
       els.calcHint.textContent = "Selecciona la ubicación de tu terreno primero.";
@@ -603,7 +603,11 @@
     renderPhotoResult();
     render(r, null);
     fetchAI(r, inputs);
-    els.results.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (fromButton || state.resultsShown) {
+      state.resultsShown = true;
+      els.results.classList.remove("hidden");
+      els.results.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   /* ---------------- Fotos del predio (análisis con IA de visión) ---------------- */
@@ -738,7 +742,7 @@
     setPhotoStatus("Analizando " + Math.min(4, state.photos.length) + " foto(s) con IA…");
     els.photoResult.classList.add("hidden");
     try {
-      var res = await fetch(apiUrl("/api/analiza-fotos"), {
+      var res = await fetch("/api/analiza-fotos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -889,7 +893,7 @@
     calc();
   });
 
-  els.calcBtn.addEventListener("click", calc);
+  els.calcBtn.addEventListener("click", function () { calc(true); });
 
   document.addEventListener("click", function (e) {
     var btn = e.target.closest("[data-open-providers]");

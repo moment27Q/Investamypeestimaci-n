@@ -53,13 +53,14 @@
     condicion: $("condicion"),
     estado: $("estado"),
     zona: $("zona"),
+    zonaValue: $("zonaValue"),
     areaLabel: $("areaLabel"),
     totalFloors: $("totalFloors"),
     elevator: $("elevator"),
     parking: $("parking"),
     storage: $("storage"),
-    view: $("view"),
     finishes: $("finishes"),
+    finishesValue: $("finishesValue"),
     amenities: $("amenities"),
     maintenance: $("maintenance"),
     regime: $("regime"),
@@ -96,6 +97,7 @@
     apClose: $("apClose"),
     tasarBtn: $("tasarBtn"),
     resultCard: $("resultCard"),
+    loadingPanel: $("loadingPanel"),
     descripcion: $("descripcion"),
     descNote: $("descNote"),
     propertyPhotos: $("propertyPhotos"),
@@ -117,8 +119,13 @@
     rentRest: [],
     envProfile: null,
     areaTouched: false,
-    zoneTouched: false,
     tasado: false,
+    loading: false,
+    runSeq: 0,
+    marketDone: false,
+    rentDone: false,
+    envDone: false,
+    aiLocSeq: 0,
     descAdj: null,
     descSeq: 0,
     photos: [],
@@ -204,6 +211,7 @@
     }
     state.photoAdj = null;
     state.photoSeq++;
+    setFinishes("intermedio", { pending: true });
     renderPropertyPhotos();
 
     const count = state.photos.length;
@@ -238,6 +246,7 @@
       state.photos.splice(index, 1);
       state.photoAdj = null;
       state.photoSeq++;
+      setFinishes("intermedio", { pending: true });
       if (els.propertyPhotoNote) els.propertyPhotoNote.classList.add("hidden");
       renderPropertyPhotos();
       setPropertyPhotoStatus(state.photos.length
@@ -342,39 +351,153 @@
     return { pretty: pretty, zone: zone.trim() };
   }
 
+  /* ---------------- Validación de ubicación ---------------- */
+  function invalidLocationReason(loc, place) {
+    const a = (place && place.address) || {};
+    const water = [
+      a.sea, a.ocean, a.bay, a.gulf, a.strait, a.lake, a.reservoir,
+      a.river, a.water, a.canal, a.dam
+    ].filter(Boolean);
+    if (water.length) {
+      return "La ubicación es errónea: el punto cae en " + water[0] +
+        " (fuera de tierra firme). Elige un punto sobre la propiedad.";
+    }
+    if (!loc.district && !loc.city && !loc.state &&
+        !(a.road || a.suburb || a.neighbourhood || a.city_district ||
+          a.town || a.municipality || a.county)) {
+      return "La ubicación es errónea: el punto no corresponde a ninguna zona con referencia urbana. Elige un punto sobre la propiedad.";
+    }
+    return null;
+  }
+
+  function checkAIValidation(loc) {
+    const seq = ++state.aiLocSeq;
+    const params = new URLSearchParams({
+      lat: loc.lat != null ? loc.lat : "",
+      lon: loc.lon != null ? loc.lon : "",
+      district: loc.district || "",
+      city: loc.city || "",
+      address: loc.display || ""
+    });
+    fetch("/api/validate-location?" + params.toString())
+      .then((r) => r.json())
+      .then((data) => {
+        if (seq !== state.aiLocSeq) return;
+        if (data && data.enabled && data.valid === false) {
+          state.location = null;
+          if (marker) { map.removeLayer(marker); marker = null; }
+          showStatus("Ubicación errónea: " + (data.reason || "el punto no corresponde a una propiedad habitable."), true, true);
+          resetResults();
+        }
+      })
+      .catch(() => {});
+  }
+
+  function rejectLocation(reason) {
+    state.location = null;
+    if (marker) { map.removeLayer(marker); marker = null; }
+    showStatus(reason, true, true);
+    resetResults();
+  }
+
+  const zonaLabels = {
+    auto: "Auto (calculada)",
+    premium: "Premium / frente al mar / exclusiva",
+    central: "Céntrica / consolidada",
+    normal: "Zona residencial estándar",
+    periferia: "Periférica / en expansión"
+  };
+
+  function setZona(val) {
+    if (val && zonaLabels[val]) {
+      els.zona.value = val;
+      els.zonaValue.textContent = zonaLabels[val];
+      els.zonaValue.classList.remove("muted");
+    } else {
+      els.zonaValue.textContent = "Evaluando la zona…";
+      els.zonaValue.classList.add("muted");
+    }
+  }
+
+  const finishesLabels = { basico: "Básico", intermedio: "Intermedio", premium: "Premium" };
+
+  function setFinishes(val, opts) {
+    opts = opts || {};
+    const v = finishesLabels[val] ? val : "intermedio";
+    els.finishes.value = v;
+    if (!els.finishesValue) return;
+    if (opts.pending) {
+      els.finishesValue.textContent = "Pendiente de foto del interior…";
+      els.finishesValue.classList.add("muted");
+    } else {
+      els.finishesValue.textContent = finishesLabels[v] + (opts.muted ? " (por defecto)" : "");
+      els.finishesValue.classList.toggle("muted", !!opts.muted);
+    }
+  }
+
   function applyPlace(place) {
     const loc = placeToLocation(place);
+    const bad = invalidLocationReason(loc, place);
+    if (bad) { rejectLocation(bad); return; }
     state.location = loc;
     setMarker(loc.lat, loc.lon);
-    els.zona.value = "auto";
-    state.zoneTouched = false;
+    setZona("auto");
+    setFinishes("intermedio", { pending: true });
     const { pretty } = placeLabel(place);
     const zone = loc.district || loc.city || "zona detectada";
     els.zoneLabel.textContent = zone + " · " + pretty;
     els.mapStatus.textContent = pretty + " · presiona Tasar para calcular";
     els.mapStatus.classList.remove("hidden");
     resetResults();
+    checkAIValidation(loc);
   }
 
   async function applyReverse(lat, lon) {
     try {
       const place = await GEO.reverse(lat, lon);
       const loc = placeToLocation(place);
+      const bad = invalidLocationReason(loc, place);
+      if (bad) { rejectLocation(bad); return; }
       state.location = loc;
       setMarker(lat, lon);
-      els.zona.value = "auto";
-      state.zoneTouched = false;
+      setZona("auto");
+      setFinishes("intermedio", { pending: true });
       const { pretty } = placeLabel(place);
       els.zoneLabel.textContent = (loc.district || loc.city || "zona detectada") + " · " + pretty;
       els.mapStatus.textContent = pretty + " · presiona Tasar para calcular";
       els.mapStatus.classList.remove("hidden");
       resetResults();
+      checkAIValidation(loc);
     } catch (e) {
-      showStatus("No se pudo geocodificar ese punto: " + (e && e.message ? e.message : "error de conexión") + ".");
+      const msg = /fuera de tierra firme|Sin resultado|errónea/i.test(e.message)
+        ? e.message
+        : "No se pudo geocodificar ese punto. Prueba con un lugar más cercano a tierra.";
+      rejectLocation(msg);
     }
   }
 
   /* ---------------- Botón Tasar ---------------- */
+  function hideAllResults() {
+    const priceBlock = document.querySelector(".price-block");
+    const empty = document.querySelector(".empty-state");
+    if (priceBlock) priceBlock.classList.add("hidden");
+    if (empty) empty.classList.add("hidden");
+    [els.marketPanel, els.envPanel, els.rentalPanel, els.confidence,
+      els.breakdown, els.legalPanel, els.descNote].forEach((el) => el && el.classList.add("hidden"));
+    if (els.propertyPhotoNote) els.propertyPhotoNote.classList.add("hidden");
+  }
+
+  function setLoading(on) {
+    state.loading = on;
+    if (els.loadingPanel) els.loadingPanel.classList.toggle("hidden", !on);
+    if (on) hideAllResults();
+  }
+
+  function revealResults() {
+    if (state.marketDone) els.marketPanel.classList.remove("hidden");
+    if (state.envDone && state.envProfile) els.envPanel.classList.remove("hidden");
+  }
+
   function resetResults() {
     state.tasado = false;
     state.lastTotal = 0;
@@ -387,18 +510,11 @@
     state.rentSeq++;
     state.descSeq++;
     envSeq++;
-    const priceBlock = document.querySelector(".price-block");
+    hideAllResults();
     const empty = document.querySelector(".empty-state");
-    if (priceBlock) priceBlock.classList.add("hidden");
     if (empty) empty.classList.remove("hidden");
-    els.legalPanel.classList.add("hidden");
-    els.confidence.classList.add("hidden");
-    els.breakdown.classList.add("hidden");
-    els.rentalPanel.classList.add("hidden");
-    els.marketPanel.classList.add("hidden");
-    els.envPanel.classList.add("hidden");
-    els.descNote.classList.add("hidden");
-    if (els.propertyPhotoNote) els.propertyPhotoNote.classList.add("hidden");
+    if (els.loadingPanel) els.loadingPanel.classList.add("hidden");
+    state.loading = false;
   }
 
   function runValuation() {
@@ -408,15 +524,35 @@
       if (firstCard) firstCard.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
+    if (!state.photos.length) {
+      showStatus("Debes subir al menos una foto del interior de la propiedad para que la IA determine los acabados y pueda hacer la tasación.");
+      const photoCard = document.querySelector(".property-photos");
+      if (photoCard) photoCard.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    const runId = ++state.runSeq;
     state.tasado = true;
-    recompute();
-    fetchMarket();
-    fetchRentals();
-    fetchEnvironment();
-    fetchDescription();
-    fetchPropertyPhotos();
+    state.market = null;
+    state.rentMarket = null;
+    state.envProfile = null;
+    state.marketDone = false;
+    state.rentDone = false;
+    state.envDone = false;
+    setLoading(true);
     saveSnapshot();
-    if (els.resultCard) els.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    Promise.allSettled([
+      fetchMarket(),
+      fetchRentals(),
+      fetchEnvironment(),
+      fetchDescription(),
+      fetchPropertyPhotos()
+    ]).then(() => {
+      if (!state.tasado || runId !== state.runSeq) return;
+      setLoading(false);
+      revealResults();
+      recompute();
+      if (els.resultCard) els.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
   }
 
   els.tasarBtn.addEventListener("click", runValuation);
@@ -452,10 +588,17 @@
     );
   });
 
-  function showStatus(msg) {
+  function showStatus(msg, isError, persist) {
     els.mapStatus.textContent = msg;
     els.mapStatus.classList.remove("hidden");
-    setTimeout(() => els.mapStatus.classList.add("hidden"), 4000);
+    els.mapStatus.classList.toggle("err", !!isError);
+    clearTimeout(showStatus._t);
+    if (!persist) {
+      showStatus._t = setTimeout(
+        () => els.mapStatus.classList.add("hidden"),
+        isError ? 8000 : 4000
+      );
+    }
   }
 
   /* ---------------- Ejemplos ---------------- */
@@ -549,7 +692,7 @@
   });
 
   [els.piso, els.condicion, els.estado, els.zona,
-    els.totalFloors, els.elevator, els.parking, els.storage, els.view,
+    els.totalFloors, els.elevator, els.parking, els.storage,
     els.finishes, els.amenities, els.maintenance, els.regime, els.casaFloors,
     els.shape, els.topography, els.fence, els.zoning, els.services,
     els.corner, els.urbanization, els.road
@@ -558,9 +701,29 @@
     el.addEventListener("change", recompute);
   });
 
-  els.zona.addEventListener("change", () => {
-    state.zoneTouched = true;
+  els.zona.addEventListener("change", recompute);
+
+  els.casaFloors.addEventListener("input", () => {
+    const v = parseInt(els.casaFloors.value, 10);
+    if (v === 0) {
+      els.casaFloors.value = 1;
+      recompute();
+    }
   });
+
+  /* Estacionamiento: botones Sí/No sincronizados con el select oculto */
+  const parkingToggle = $("parkingToggle");
+  if (parkingToggle && els.parking) {
+    parkingToggle.addEventListener("click", (e) => {
+      const btn = e.target.closest(".btn-toggle-btn");
+      if (!btn || !parkingToggle.contains(btn)) return;
+      parkingToggle.querySelectorAll(".btn-toggle-btn").forEach((b) =>
+        b.classList.toggle("active", b === btn)
+      );
+      els.parking.value = btn.dataset.parking;
+      recompute();
+    });
+  }
 
   els.lmClose.addEventListener("click", closeListingModal);
   els.listingModal.addEventListener("click", (e) => {
@@ -747,7 +910,6 @@
       elevator: els.elevator.value,
       parking: els.parking.value,
       storage: els.storage.value,
-      view: els.view.value,
       finishes: els.finishes.value,
       amenities: els.amenities.value,
       maintenance: els.maintenance.value,
@@ -772,7 +934,7 @@
 
   /* ---------------- Cálculo ---------------- */
   function recompute() {
-    if (!state.tasado || !state.location) return;
+    if (!state.tasado || !state.location || state.loading) return;
     const inputs = readInputs();
     const r = computeValuation(state.location, inputs, state.market, state.envProfile, state.descAdj, state.photoAdj);
 
@@ -846,17 +1008,24 @@
       const sign = pct > 0 ? "+" : "";
       els.descNote.classList.remove("hidden");
       els.descNote.innerHTML =
-        "<b>IA</b> leyó tu descripción y ajustó el valor " + sign + pct.toFixed(1) + "%: " +
-        esc(state.descAdj.rationale || state.descAdj.summary || "");
+        "<b>IA</b> usó tu comentario como guía y ajustó el valor <b>" + sign + pct.toFixed(1) + "%</b> (" +
+        esc(state.descAdj.summary || "") + "): " +
+        esc(state.descAdj.rationale || "");
     } else {
       els.descNote.classList.add("hidden");
     }
     if (state.photoAdj && state.photoAdj.used) {
       const pct = (state.photoAdj.factor - 1) * 100;
       const sign = pct > 0 ? "+" : "";
+      const cond = state.photoAdj.condition || "bueno";
+      const fin = state.photoAdj.finishes || "intermedio";
       els.propertyPhotoNote.classList.remove("hidden");
-      els.propertyPhotoNote.innerHTML = "<b>IA con fotos</b> revisó el estado visible y los acabados" +
-        (pct ? ": ajuste " + sign + pct.toFixed(1) + "%" : ": sin ajuste") + ". " +
+      els.propertyPhotoNote.innerHTML =
+        "<b>IA con fotos</b> vio la propiedad: estado visible <b>" + esc(cond) +
+        "</b> · acabados <b>" + esc(fin) + "</b>" +
+        (pct ? " · ajuste <b>" + sign + pct.toFixed(1) + "%</b>" : " · sin ajuste") +
+        (state.photoAdj.interiorVisible === false ? " · ⚠ no se ve el interior, acabados asumidos" : "") +
+        ". " +
         esc(state.photoAdj.rationale || state.photoAdj.observations || "La evidencia visual fue incorporada de forma conservadora.");
     } else if (els.propertyPhotoNote) {
       els.propertyPhotoNote.classList.add("hidden");
@@ -869,7 +1038,7 @@
     const seq = ++state.photoSeq;
     setPropertyPhotoStatus("La IA está revisando " + state.photos.length + " foto(s) para ajustar la tasación…", false);
     try {
-      const res = await fetch(apiUrl("/api/analiza-fotos"), {
+      const res = await fetch("/api/analiza-fotos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -886,15 +1055,21 @@
       if (seq !== state.photoSeq) return;
       state.photoAdj = data && data.used ? data : null;
       if (state.photoAdj) {
+        setFinishes(state.photoAdj.finishes);
         const pct = (state.photoAdj.factor - 1) * 100;
-        setPropertyPhotoStatus("Fotos analizadas por IA. Ajuste visual: " + (pct > 0 ? "+" : "") + pct.toFixed(1) + "%.", false);
+        const interiorMsg = state.photoAdj.interiorVisible === false
+          ? " Las fotos no muestran el interior; los acabados se tomaron como intermedio."
+          : "";
+        setPropertyPhotoStatus("Fotos analizadas por IA. Ajuste visual: " + (pct > 0 ? "+" : "") + pct.toFixed(1) + "%." + interiorMsg, state.photoAdj.interiorVisible === false);
       } else {
+        setFinishes("intermedio", { muted: true });
         setPropertyPhotoStatus("Las fotos no pudieron aportar un ajuste: " + ((data && data.reason) || "se mantiene el cálculo base."), true);
       }
       recompute();
     } catch (e) {
       if (seq !== state.photoSeq) return;
       state.photoAdj = null;
+      setFinishes("intermedio", { muted: true });
       setPropertyPhotoStatus("No se pudo analizar las fotos; se mantiene el cálculo base.", true);
       recompute();
     }
@@ -908,7 +1083,8 @@
 
     const seq = ++state.marketSeq;
     state.marketFetching = true;
-    els.marketPanel.classList.remove("hidden");
+    state.marketDone = true;
+    if (!state.loading) els.marketPanel.classList.remove("hidden");
     closeListingModal();
     els.marketBadge.textContent = "Buscando…";
     els.marketBadge.className = "market-badge loading";
@@ -925,7 +1101,7 @@
       const timer = setTimeout(() => ctrl.abort(), 120000);
       let res;
       try {
-        res = await fetch(apiUrl("/api/comparables?" + params.toString()), { signal: ctrl.signal });
+        res = await fetch("/api/comparables?" + params.toString(), { signal: ctrl.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -1041,7 +1217,8 @@
     const seq = ++state.rentSeq;
     state.rentFetching = true;
     state.rentMarket = null;
-    els.rentalPanel.classList.remove("hidden");
+    state.rentDone = true;
+    if (!state.loading) els.rentalPanel.classList.remove("hidden");
     els.rentalBadge.textContent = "Buscando…";
     els.rentalBadge.className = "rental-badge loading";
     els.rentalSub.textContent = "Revisando avisos de alquiler de Urbania y Adondevivir en " +
@@ -1057,7 +1234,7 @@
       const timer = setTimeout(() => ctrl.abort(), 120000);
       let res;
       try {
-        res = await fetch(apiUrl("/api/rentals?" + params.toString()), { signal: ctrl.signal });
+        res = await fetch("/api/rentals?" + params.toString(), { signal: ctrl.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -1175,7 +1352,7 @@
     renderRentModal(l, r);
 
     if (l.url) {
-      fetch(apiUrl("/api/listing-detail?url=" + encodeURIComponent(l.url)))
+      fetch("/api/listing-detail?url=" + encodeURIComponent(l.url))
         .then((res) => res.json())
         .then((d) => {
           if (els.listingModal.classList.contains("hidden")) return;
@@ -1274,7 +1451,7 @@
     renderListingModal(l, r);
 
     if (l.url) {
-      fetch(apiUrl("/api/listing-detail?url=" + encodeURIComponent(l.url)))
+      fetch("/api/listing-detail?url=" + encodeURIComponent(l.url))
         .then((res) => res.json())
         .then((d) => {
           if (els.listingModal.classList.contains("hidden")) return;
@@ -1391,7 +1568,8 @@
     const loc = state.location;
     if (!loc || (!loc.district && !loc.city)) return;
     const seq = ++envSeq;
-    els.envPanel.classList.remove("hidden");
+    state.envDone = true;
+    if (!state.loading) els.envPanel.classList.remove("hidden");
     els.envBadge.textContent = "…";
     els.envBadge.className = "env-badge loading";
     els.envSub.textContent = "Analizando el entorno con IA…";
@@ -1407,7 +1585,7 @@
         lat: loc.lat != null ? loc.lat : "",
         lon: loc.lon != null ? loc.lon : ""
       });
-      const res = await fetch(apiUrl("/api/environment?" + params.toString()));
+      const res = await fetch("/api/environment?" + params.toString());
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
       if (seq !== envSeq || !state.location) return;
@@ -1439,7 +1617,7 @@
       const timer = setTimeout(() => ctrl.abort(), 40000);
       let res;
       try {
-        res = await fetch(apiUrl("/api/descripcion"), {
+        res = await fetch("/api/descripcion", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: ctrl.signal,
@@ -1490,14 +1668,8 @@
     const badgeClass = { A: "alta", B: "alta", C: "media", D: "baja", E: "baja" }[env.nse] || "media";
     els.envBadge.textContent = env.nseLabel || "Medio";
     els.envBadge.className = "env-badge " + badgeClass;
-    const zonaLabels = {
-      premium: "Premium / frente al mar / exclusiva",
-      central: "Céntrica / consolidada",
-      normal: "Zona residencial estándar",
-      periferia: "Periférica / en expansión"
-    };
-    if (env.zona && zonaLabels[env.zona] && !state.zoneTouched) {
-      els.zona.value = env.zona;
+    if (env.zona) {
+      setZona(env.zona);
     }
     els.envSub.textContent = "Entorno clasificado por IA con base en nivel socioeconómico, " +
       "equipamiento comercial y servicios del distrito." +
