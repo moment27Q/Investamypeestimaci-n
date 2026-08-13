@@ -95,6 +95,16 @@
     appraiserModal: $("appraiserModal"),
     apBody: $("apBody"),
     apClose: $("apClose"),
+    leadModal: $("leadModal"),
+    leadForm: $("leadForm"),
+    leadName: $("leadName"),
+    leadLastName: $("leadLastName"),
+    leadEmail: $("leadEmail"),
+    leadPhone: $("leadPhone"),
+    leadAddress: $("leadAddress"),
+    leadStatus: $("leadStatus"),
+    leadSubmit: $("leadSubmit"),
+    leadClose: $("leadClose"),
     tasarBtn: $("tasarBtn"),
     resultCard: $("resultCard"),
     loadingPanel: $("loadingPanel"),
@@ -530,6 +540,105 @@
       if (photoCard) photoCard.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    openLeadModal();
+  }
+
+  function openLeadModal() {
+    if (!els.leadModal) { startValuation(); return; }
+    els.leadForm.reset();
+    const loc = state.location;
+    if (els.leadAddress && loc) {
+      els.leadAddress.value = loc.display || loc.address || "";
+    }
+    setLeadStatus("", null);
+    els.leadSubmit.disabled = false;
+    els.leadSubmit.textContent = "Tasar ahora";
+    els.leadModal.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
+    setTimeout(() => {
+      const first = els.leadModal.querySelector("input");
+      if (first) first.focus();
+    }, 50);
+  }
+
+  function closeLeadModal() {
+    if (!els.leadModal) return;
+    els.leadModal.classList.add("hidden");
+    document.body.classList.remove("no-scroll");
+  }
+
+  function setLeadStatus(msg, type) {
+    if (!els.leadStatus) return;
+    els.leadStatus.textContent = msg || "";
+    els.leadStatus.classList.toggle("hidden", !msg);
+    els.leadStatus.classList.toggle("err", type === "err");
+    els.leadStatus.classList.toggle("ok", type === "ok");
+  }
+
+  function sendLeadAndStart() {
+    if (!els.leadModal) { startValuation(); return; }
+    const name = els.leadName.value.trim();
+    const lastName = els.leadLastName.value.trim();
+    const email = els.leadEmail.value.trim();
+    const phone = els.leadPhone.value.trim();
+    const address = els.leadAddress.value.trim();
+
+    if (!name || !lastName || !email || !phone || !address) {
+      setLeadStatus("Completa todos los campos para continuar.", "err");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      setLeadStatus("Ingresa un correo electrónico válido.", "err");
+      return;
+    }
+
+    els.leadSubmit.disabled = true;
+    els.leadSubmit.textContent = "Enviando…";
+    setLeadStatus("", null);
+
+    const data = {
+      _subject: "Nueva tasación solicitada — " + name + " " + lastName,
+      _template: "table",
+      _replyto: email,
+      Nombre: name,
+      Apellido: lastName,
+      Correo: email,
+      Telefono: phone,
+      Direccion: address
+    };
+
+    fetch("https://formsubmit.co/ajax/contacto@tasador.investamype.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    })
+      .then((res) => res.json().then((json) => ({ ok: res.ok, json })))
+      .then(({ ok, json }) => {
+        const success = json && (json.success === "true" || json.success === true);
+        if (!ok && !success) throw new Error("No se pudo enviar el correo.");
+        setLeadStatus("Datos enviados. Calculando tu tasación…", "ok");
+        setTimeout(() => {
+          closeLeadModal();
+          startValuation();
+        }, 600);
+      })
+      .catch(() => {
+        setLeadStatus("No se pudo enviar el correo. Verifica tu conexión e intenta de nuevo.", "err");
+        els.leadSubmit.disabled = false;
+        els.leadSubmit.textContent = "Tasar ahora";
+      });
+  }
+
+  if (els.leadForm) els.leadForm.addEventListener("submit", (e) => { e.preventDefault(); sendLeadAndStart(); });
+  if (els.leadClose) els.leadClose.addEventListener("click", closeLeadModal);
+  if (els.leadModal) els.leadModal.addEventListener("click", (e) => {
+    if (e.target === els.leadModal) closeLeadModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && els.leadModal && !els.leadModal.classList.contains("hidden")) closeLeadModal();
+  });
+
+  function startValuation() {
     const runId = ++state.runSeq;
     state.tasado = true;
     state.market = null;

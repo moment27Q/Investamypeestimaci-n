@@ -894,6 +894,18 @@ body.no-scroll { overflow: hidden; }
 .ap-submit:hover { filter: brightness(1.06); }
 .ap-note { margin: 0; font-size: 11px; color: var(--ink-soft); line-height: 1.45; }
 
+/* ---------- Formulario de contacto antes de tasar ---------- */
+.modal-lead { max-width: 480px; }
+.lead-form .lead-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lead-form .lead-status {
+  margin: 0; padding: 9px 12px; border-radius: 8px;
+  font-size: 12px; line-height: 1.45;
+}
+.lead-form .lead-status.ok { background: #e8f6ee; color: #1d5a34; border: 1px solid #cfe6da; }
+.lead-form .lead-status.err { background: #fdecea; color: #b3402f; border: 1px solid #f3cdc8; }
+.lead-form .ap-submit:disabled { opacity: 0.65; cursor: wait; }
+@media (max-width: 480px) { .lead-form .lead-grid { grid-template-columns: 1fr; } }
+
 /* ---------- Página del informe ---------- */
 body.informe-page { background: #e8ebf1; }
 .informe-bar {

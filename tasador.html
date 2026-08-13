@@ -510,6 +510,40 @@
     </div>
   </div>
 
+  <div class="modal-overlay hidden" id="leadModal">
+    <div class="modal modal-lead">
+      <div class="modal-head">
+        <h3>Completa tus datos para tasar</h3>
+        <button type="button" class="modal-close" id="leadClose" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="ap-intro">Déjanos tus datos y te enviaremos el resultado de tu tasación. Solo se usan para contactarte con la información de tu inmueble.</p>
+        <form id="leadForm" class="ap-form lead-form" novalidate>
+          <div class="lead-grid">
+            <label>Nombre
+              <input type="text" id="leadName" autocomplete="given-name" placeholder="Ej. Juan" required>
+            </label>
+            <label>Apellido
+              <input type="text" id="leadLastName" autocomplete="family-name" placeholder="Ej. Pérez" required>
+            </label>
+          </div>
+          <label>Correo electrónico
+            <input type="email" id="leadEmail" autocomplete="email" placeholder="Ej. juan@gmail.com" required>
+          </label>
+          <label>Número de teléfono / WhatsApp
+            <input type="tel" id="leadPhone" autocomplete="tel" placeholder="Ej. 999 888 777" required>
+          </label>
+          <label>Dirección de la propiedad
+            <input type="text" id="leadAddress" placeholder="Ej. Av. Larco 1234, Miraflores" required>
+          </label>
+          <p class="lead-status hidden" id="leadStatus"></p>
+          <button type="submit" class="ap-submit" id="leadSubmit">Tasar ahora</button>
+          <p class="ap-note">Tus datos se envían de forma segura a contacto@tasador.investamype.com y solo se usan para enviarte el resultado de la tasación.</p>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="js/data.js"></script>
   <script src="js/valuation.js"></script>
