@@ -25,7 +25,16 @@
       <a class="nav-link" href="proyectos.html" id="nexoLink">Proyectos</a>
     </nav>
     <div class="topbar-meta">
-      <span class="live-dot"><i></i> En vivo · Urbania · ASEI · BCRP</span>
+      <div class="quota-wrap">
+        <button type="button" class="quota-counter" id="quotaBtn" aria-haspopup="true" title="Tu cupo de tasaciones">
+          <i class="quota-ico" aria-hidden="true"></i><span id="quotaCount">—</span>
+        </button>
+        <div class="quota-pop hidden" id="quotaPop">
+          <p class="quota-pop-title" id="quotaPopTitle"></p>
+          <p class="quota-pop-sub hidden" id="quotaPopSub"></p>
+          <button type="button" class="quota-pop-btn" id="quotaActionBtn"></button>
+        </div>
+      </div>
       <span class="auth-box">
         <span class="auth-user hidden" id="authUser"></span>
         <button type="button" class="auth-btn" id="authBtn">Ingresar</button>
@@ -582,7 +591,24 @@
         <p class="lim-sub">Tu cupo se renueva automáticamente a la medianoche. Por ahora no se pueden generar más tasaciones.</p>
         <p class="lim-count">Próximo reinicio: <b id="limitCountdown">—</b></p>
         <p class="lim-note">¿Necesitas más tasaciones hoy? Escríbenos a <a href="mailto:contacto@tasador.investamype.com">contacto@tasador.investamype.com</a>.</p>
-        <button type="button" class="ap-submit" id="limitCloseBtn">Entendido</button>
+        <button type="button" class="ap-submit" id="limitUpgradeBtn">Mejorar plan (ilimitadas)</button>
+        <button type="button" class="ap-submit ghost" id="limitCloseBtn">Entendido</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="planModal">
+    <div class="modal modal-plan">
+      <div class="modal-head">
+        <h3>Mejora tu plan</h3>
+        <button type="button" class="modal-close" id="planClose" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="plan-current" id="planCurrent"></p>
+        <div class="plan-grid" id="planGrid"></div>
+        <p class="plan-status hidden" id="planStatus"></p>
+        <p class="plan-cancel"><a href="#" id="planCancel">Cancelar mi plan y volver a Gratis</a></p>
+        <p class="ap-note">El pago se activa al instante de forma simulada. Próximamente con Yape, Plin o tarjeta.</p>
       </div>
     </div>
   </div>

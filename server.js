@@ -162,15 +162,21 @@ function nextLimaMidnight() {
   return Date.UTC(lima.getUTCFullYear(), lima.getUTCMonth(), lima.getUTCDate() + 1) - LIMA_OFFSET_MS;
 }
 
-async function usageStatusForUser(userId) {
+const PAID_PLANS = { basico: true, premium: true };
+
+async function usageStatusForUser(user) {
   const date = limaDate();
+  if (user && user.plan && PAID_PLANS[user.plan]) {
+    return { ok: true, unlimited: true, plan: user.plan, used: 0, limit: null, remaining: null, blocked: false, resetAt: null, date: date };
+  }
   let used = 0;
   if (db && typeof db.getUserUsage === "function") {
-    used = await db.getUserUsage(userId, date);
+    used = await db.getUserUsage(user.id, date);
     if (used == null) used = 0;
   }
   return {
     ok: true,
+    plan: "free",
     used: used,
     limit: USAGE_LIMIT,
     remaining: Math.max(0, USAGE_LIMIT - used),
@@ -180,18 +186,21 @@ async function usageStatusForUser(userId) {
   };
 }
 
-async function consumeUsageForUser(userId) {
+async function consumeUsageForUser(user) {
   const date = limaDate();
+  if (user && user.plan && PAID_PLANS[user.plan]) {
+    return { ok: true, unlimited: true, plan: user.plan, used: 0, limit: null, remaining: null, blocked: false, resetAt: null, date: date };
+  }
   let used = 0;
   if (db && typeof db.getUserUsage === "function") {
-    used = await db.getUserUsage(userId, date);
+    used = await db.getUserUsage(user.id, date);
     if (used == null) used = 0;
   }
-  if (used >= USAGE_LIMIT) return usageStatusForUser(userId);
+  if (used >= USAGE_LIMIT) return usageStatusForUser(user);
   if (db && typeof db.incrementUserUsage === "function") {
-    await db.incrementUserUsage(userId, date);
+    await db.incrementUserUsage(user.id, date);
   }
-  return usageStatusForUser(userId);
+  return usageStatusForUser(user);
 }
 
 /* ---------- Autenticación (registro / inicio de sesión) ---------- */
@@ -304,7 +313,7 @@ const server = http.createServer((req, res) => {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "no-store"
       });
-      res.end(JSON.stringify(await usageStatusForUser(user.id)));
+      res.end(JSON.stringify(await usageStatusForUser(user)));
     })();
     return;
   }
@@ -317,7 +326,7 @@ const server = http.createServer((req, res) => {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "no-store"
       });
-      res.end(JSON.stringify(await consumeUsageForUser(user.id)));
+      res.end(JSON.stringify(await consumeUsageForUser(user)));
     })();
     return;
   }
@@ -360,7 +369,7 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({
           ok: true,
           token,
-          user: { id: user.id, name: user.name, email: user.email }
+          user: { id: user.id, name: user.name, email: user.email, plan: user.plan || "free" }
         }));
       })
       .catch((e) => {
@@ -387,7 +396,7 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({
           ok: true,
           token,
-          user: { id: user.id, name: user.name, email: user.email }
+          user: { id: user.id, name: user.name, email: user.email, plan: user.plan || "free" }
         }));
       })
       .catch((e) => {
@@ -404,6 +413,34 @@ const server = http.createServer((req, res) => {
     if (token && db && db.deleteSession) db.deleteSession(hashToken(token)).catch(() => {});
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  if (req.method === "POST" && parsed.pathname === "/api/plan") {
+    (async () => {
+      const user = await requireAuth(req, res);
+      if (!user) return;
+      const body = await readJsonBody(req, 20000).catch(() => ({}));
+      const plan = String(body.plan || "").trim().toLowerCase();
+      if (!["free", "basico", "premium"].includes(plan)) {
+        res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: false, error: "Plan inválido." }));
+        return;
+      }
+      if (!db || !db.setUserPlan || !db.isReady()) {
+        res.writeHead(503, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: false, error: "La base de datos no está conectada." }));
+        return;
+      }
+      const updated = await db.setUserPlan(user.id, plan);
+      if (!updated) {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: false, error: "No se pudo actualizar el plan." }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: true, plan: updated.plan, user: { id: updated.id, name: updated.name, email: updated.email, plan: updated.plan } }));
+    })();
     return;
   }
 

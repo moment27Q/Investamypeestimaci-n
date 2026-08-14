@@ -65,6 +65,40 @@ body {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--green);
 }
+
+/* ---------- Contador de cupo (barra superior) ---------- */
+.quota-wrap { position: relative; }
+.quota-counter {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: 999px;
+  border: 1px solid #cfe0f4; background: #f4f8fe;
+  font-size: 12px; font-weight: 700; color: var(--accent);
+  cursor: pointer; transition: background 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.quota-counter:hover { border-color: var(--accent); background: #eaf1fa; }
+.quota-counter .quota-ico {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green);
+}
+.quota-counter.limit .quota-ico { background: #eab308; }
+.quota-counter.paid .quota-ico { background: #7c3aed; }
+.quota-pop {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  width: 264px; padding: 14px 15px;
+  background: #fff; border: 1px solid #e4eaf2; border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(16, 44, 86, 0.16);
+}
+.quota-pop-title { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--ink); }
+.quota-pop-sub { margin: 0 0 12px; font-size: 12.5px; line-height: 1.45; color: var(--ink-soft); }
+.quota-pop-btn {
+  width: 100%; padding: 9px 12px; border: 0; border-radius: 9px;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: filter 0.12s;
+}
+.quota-pop-btn:hover { filter: brightness(1.08); }
+
+@media (max-width: 480px) { .quota-counter { padding: 5px 8px; font-size: 11px; } .quota-pop { right: -40px; } }
 html { scroll-behavior: smooth; }
 
 /* ---------- Hero (inicio) ---------- */
@@ -1013,6 +1047,46 @@ body.no-scroll { overflow: hidden; }
 .auth-status.err { background: #fdecea; color: #b3402f; border: 1px solid #f3cdc8; }
 .auth-note { margin: 12px 0 0; font-size: 11px; color: var(--ink-soft); line-height: 1.45; }
 @media (max-width: 480px) { .auth-box { margin-left: 10px; } .auth-user { display: none; } }
+
+/* ---------- Planes / mejora de plan ---------- */
+.ap-submit.ghost { background: #fff; color: var(--ink); border: 1.5px solid var(--line); }
+.ap-submit.ghost:hover { border-color: var(--accent); color: var(--accent); background: #f4f8fe; }
+.modal-plan { max-width: 620px; }
+.plan-current { margin: 0 0 14px; font-size: 12.5px; color: var(--ink-soft); }
+.plan-current b { color: var(--accent); }
+.plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.plan-card {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px; border: 1.5px solid var(--line); border-radius: 12px;
+  background: #fff;
+}
+.plan-card.highlight { border-color: #c9a227; box-shadow: 0 6px 18px rgba(201, 162, 39, 0.14); }
+.plan-card.is-current { background: #f4f8fe; }
+.plan-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.plan-name { margin: 0; font-size: 15px; font-weight: 800; color: var(--ink); }
+.plan-badge { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; color: #8a6d12; background: #fdf3d9; border: 1px solid #efdcae; border-radius: 999px; padding: 2px 8px; }
+.plan-badge.current { color: var(--accent); background: #eaf1fa; border-color: #cfe0f4; }
+.plan-price { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.plan-price b { font-size: 17px; color: var(--ink); }
+.plan-features { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.plan-features li { font-size: 12.5px; line-height: 1.4; color: var(--ink); }
+.plan-features li::before { content: "✓ "; color: var(--green); font-weight: 800; }
+.plan-btn {
+  margin-top: auto; padding: 9px 12px; border-radius: 9px; border: 0;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.plan-btn:hover { filter: brightness(1.08); }
+.plan-btn.current { background: #eaf1fa; color: var(--accent); cursor: default; }
+.plan-status {
+  margin: 14px 0 0; padding: 9px 12px; border-radius: 8px;
+  font-size: 12px; line-height: 1.45;
+}
+.plan-status.ok { background: #e8f6ee; color: #1d5a34; border: 1px solid #cfe6da; }
+.plan-status.err { background: #fdecea; color: #b3402f; border: 1px solid #f3cdc8; }
+.plan-cancel { margin: 14px 0 0; text-align: center; font-size: 12px; }
+.plan-cancel a { color: var(--ink-soft); }
+.plan-cancel a:hover { color: #b3402f; }
+@media (max-width: 560px) { .plan-grid { grid-template-columns: 1fr; } }
 
 /* ---------- Página del informe ---------- */
 body.informe-page { background: #e8ebf1; }

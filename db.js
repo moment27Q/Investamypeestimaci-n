@@ -87,6 +87,7 @@ async function initDb() {
         name          TEXT NOT NULL,
         email         TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
+        plan          TEXT NOT NULL DEFAULT 'free',
         created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
       );
 
@@ -130,6 +131,9 @@ async function initDb() {
          AND a.source IS NOT DISTINCT FROM b.source
          AND a.url_key IS NOT DISTINCT FROM b.url_key
          AND a.url_key IS NOT NULL AND a.url_key <> '';
+    `);
+    await p.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
     `);
     console.log("[db] conectado y tablas listas");
     return true;
@@ -280,6 +284,7 @@ module.exports = {
   createSession,
   findUserByToken,
   deleteSession,
+  setUserPlan,
   getUserUsage,
   incrementUserUsage
 };
@@ -294,7 +299,7 @@ async function createUser({ name, email, passwordHash }) {
   const r = await p.query(
     `INSERT INTO users (name, email, password_hash)
      VALUES ($1, LOWER($2), $3)
-     RETURNING id, name, email, created_at`,
+     RETURNING id, name, email, plan, created_at`,
     [String(name || "").trim(), String(email || "").trim(), passwordHash]
   );
   return r.rows[0] || null;
@@ -314,7 +319,7 @@ async function findUserById(id) {
   const p = getPool();
   if (!p) return null;
   const r = await p.query(
-    `SELECT id, name, email, created_at FROM users WHERE id = $1`,
+    `SELECT id, name, email, plan, created_at FROM users WHERE id = $1`,
     [id]
   );
   return r.rows[0] || null;
@@ -336,11 +341,22 @@ async function findUserByToken(tokenHash) {
   const p = getPool();
   if (!p) return null;
   const r = await p.query(
-    `SELECT u.id, u.name, u.email, u.created_at
+    `SELECT u.id, u.name, u.email, u.plan, u.created_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = $1 AND s.expires_at > now()`,
     [tokenHash]
+  );
+  return r.rows[0] || null;
+}
+
+async function setUserPlan(userId, plan) {
+  const p = getPool();
+  if (!p) return null;
+  const r = await p.query(
+    `UPDATE users SET plan = $2 WHERE id = $1
+     RETURNING id, name, email, plan`,
+    [userId, plan]
   );
   return r.rows[0] || null;
 }

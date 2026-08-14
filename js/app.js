@@ -118,6 +118,19 @@
     limitCountdown: $("limitCountdown"),
     limitClose: $("limitClose"),
     limitCloseBtn: $("limitCloseBtn"),
+    limitUpgradeBtn: $("limitUpgradeBtn"),
+    quotaBtn: $("quotaBtn"),
+    quotaCount: $("quotaCount"),
+    quotaPop: $("quotaPop"),
+    quotaPopTitle: $("quotaPopTitle"),
+    quotaPopSub: $("quotaPopSub"),
+    quotaActionBtn: $("quotaActionBtn"),
+    planModal: $("planModal"),
+    planCurrent: $("planCurrent"),
+    planGrid: $("planGrid"),
+    planStatus: $("planStatus"),
+    planClose: $("planClose"),
+    planCancel: $("planCancel"),
     quotaHint: $("quotaHint"),
     tasarBtn: $("tasarBtn"),
     resultCard: $("resultCard"),
@@ -728,16 +741,16 @@
         clearTimeout(timer);
       }
       if (res.status === 401) {
-        return { remote: false, requiresLogin: true, used: 0, limit: USO_LIMIT, remaining: USO_LIMIT, blocked: false, resetAt: null };
+        return { remote: false, requiresLogin: true, plan: "free", used: 0, limit: USO_LIMIT, remaining: USO_LIMIT, blocked: false, resetAt: null };
       }
       if (!res.ok) throw new Error("http");
       const data = await res.json().catch(() => ({}));
       if (data && data.unlimited) {
-        return { remote: true, unlimited: true, used: 0, limit: null, remaining: null, blocked: false, resetAt: null };
+        return { remote: true, unlimited: true, plan: data.plan || "basico", used: 0, limit: null, remaining: null, blocked: false, resetAt: null };
       }
       if (typeof data.used !== "number") throw new Error("shape");
       return {
-        remote: true, used: data.used, limit: data.limit || USO_LIMIT,
+        remote: true, plan: data.plan || "free", used: data.used, limit: data.limit || USO_LIMIT,
         remaining: typeof data.remaining === "number" ? data.remaining : Math.max(0, (data.limit || USO_LIMIT) - data.used),
         blocked: !!data.blocked, resetAt: data.resetAt
       };
@@ -761,11 +774,11 @@
       if (!res.ok) throw new Error("http");
       const data = await res.json().catch(() => ({}));
       if (data && data.unlimited) {
-        return { remote: true, unlimited: true, used: 0, limit: null, remaining: null, blocked: false, resetAt: null };
+        return { remote: true, unlimited: true, plan: data.plan || "basico", used: 0, limit: null, remaining: null, blocked: false, resetAt: null };
       }
       if (typeof data.used !== "number") throw new Error("shape");
       return {
-        remote: true, used: data.used, limit: data.limit || USO_LIMIT,
+        remote: true, plan: data.plan || "free", used: data.used, limit: data.limit || USO_LIMIT,
         remaining: typeof data.remaining === "number" ? data.remaining : Math.max(0, (data.limit || USO_LIMIT) - data.used),
         blocked: !!data.blocked, resetAt: data.resetAt
       };
@@ -788,6 +801,105 @@
     return h > 0 ? p(h) + ":" + p(m) + ":" + p(s) : p(m) + ":" + p(s);
   }
 
+  /* ---------- Planes (cupo / mejora de plan) ---------- */
+  const PLANS = {
+    free: {
+      id: "free", name: "Gratis", price: "S/ 0",
+      tasaciones: "5 tasaciones gratis al día",
+      note: "Para probar la herramienta",
+      features: ["5 tasaciones gratuitas al día", "Valor estimado en 60 segundos"]
+    },
+    basico: {
+      id: "basico", name: "Básico", price: "S/ 19.90",
+      tasaciones: "Tasaciones ilimitadas",
+      note: "Ideal para uso personal",
+      features: ["Tasaciones ilimitadas", "Todos los distritos de Lima y provincias", "Valor estimado en 60 segundos"]
+    },
+    premium: {
+      id: "premium", name: "Premium", price: "S/ 39.90",
+      tasaciones: "Tasaciones ilimitadas",
+      note: "Todo lo del Básico + extras",
+      features: ["Tasaciones ilimitadas", "Maximiza con estrategias avanzadas", "Soporte prioritario por WhatsApp", "Todos los distritos de Lima y provincias"]
+    }
+  };
+
+  const PLAN_ORDER = ["free", "basico", "premium"];
+
+  function currentPlan() {
+    if (!window.Auth) return "free";
+    const u = Auth.getUser();
+    return u && u.plan ? u.plan : "free";
+  }
+
+  function updateQuotaCounter(uso) {
+    if (!els.quotaBtn || !els.quotaCount) return;
+    const btn = els.quotaBtn;
+    const span = els.quotaCount;
+    btn.classList.remove("limit", "paid");
+    if (!uso || uso.requiresLogin) {
+      span.textContent = "Ingresar";
+    } else if (uso.unlimited) {
+      span.textContent = "∞";
+      btn.classList.add("paid");
+      btn.title = "Plan " + (PLANS[uso.plan] ? PLANS[uso.plan].name : uso.plan) + " · tasaciones ilimitadas";
+    } else {
+      span.textContent = uso.remaining + "/" + uso.limit;
+      btn.classList.add(uso.blocked ? "limit" : "paid");
+      btn.title = "Te quedan " + uso.remaining + " de " + uso.limit + " tasaciones gratuitas hoy";
+    }
+  }
+
+  function renderQuotaPop(uso) {
+    const pop = els.quotaPop;
+    const title = els.quotaPopTitle;
+    const sub = els.quotaPopSub;
+    const action = els.quotaActionBtn;
+    if (!pop || !title || !action) return;
+    if (!uso || uso.requiresLogin || !window.Auth || !Auth.isLoggedIn()) {
+      title.textContent = "Tasaciones gratuitas";
+      if (sub) { sub.textContent = "Inicia sesión para ver tu cupo y poder tasar tu propiedad."; sub.classList.remove("hidden"); }
+      action.textContent = "Ingresar";
+      action.onclick = () => { closeQuotaPop(); Auth.requireLogin(() => {}, "Inicia sesión para ver tu cupo y tasar tu propiedad."); };
+      return;
+    }
+    const plan = PLANS[uso.plan] || PLANS.free;
+    if (uso.unlimited) {
+      title.textContent = "Plan " + plan.name + " · " + plan.price + "/mes";
+      if (sub) { sub.textContent = "Tienes tasaciones ilimitadas. Puedes cambiar de plan cuando quieras."; sub.classList.remove("hidden"); }
+      action.textContent = "Cambiar de plan";
+      action.onclick = () => { closeQuotaPop(); openPlanModal(); };
+      return;
+    }
+    title.textContent = uso.blocked
+      ? "Sin cupo de tasaciones hoy"
+      : "Te quedan " + uso.remaining + " de " + uso.limit + " tasaciones gratuitas hoy.";
+    if (sub) {
+      sub.textContent = uso.blocked
+        ? "Tu cupo se renueva mañana. Mejora tu plan para tasar sin límites."
+        : "Cada tasación resta una opción. Mejora tu plan para tasar sin límites.";
+      sub.classList.remove("hidden");
+    }
+    action.textContent = uso.blocked ? "Mejorar plan (desde S/ 19.90)" : "Mejorar plan (ilimitadas)";
+    action.onclick = () => { closeQuotaPop(); openPlanModal(); };
+  }
+
+  function toggleQuotaPop() {
+    const pop = els.quotaPop;
+    if (!pop) return;
+    if (pop.classList.contains("hidden")) {
+      fetchUsoStatus().then((uso) => {
+        renderQuotaPop(uso);
+        pop.classList.remove("hidden");
+      });
+    } else {
+      closeQuotaPop();
+    }
+  }
+
+  function closeQuotaPop() {
+    if (els.quotaPop) els.quotaPop.classList.add("hidden");
+  }
+
   function refreshQuotaHint(uso) {
     const h = els.quotaHint;
     if (h) {
@@ -803,7 +915,98 @@
         h.classList.remove("limit");
       }
     }
+    updateQuotaCounter(uso);
     if (els.tasarBtn) els.tasarBtn.disabled = !!(uso && uso.blocked && !uso.unlimited && !uso.requiresLogin);
+  }
+
+  function openPlanModal() {
+    if (!window.Auth || !Auth.isLoggedIn()) {
+      Auth.requireLogin(() => openPlanModal(), "Inicia sesión para ver los planes disponibles.");
+      return;
+    }
+    if (!els.planModal) return;
+    setPlanStatus("");
+    renderPlanGrid();
+    els.planModal.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
+  }
+
+  function closePlanModal() {
+    if (!els.planModal) return;
+    els.planModal.classList.add("hidden");
+    document.body.classList.remove("no-scroll");
+  }
+
+  function setPlanStatus(msg, isErr) {
+    const st = els.planStatus;
+    if (!st) return;
+    st.textContent = msg || "";
+    st.classList.toggle("hidden", !msg);
+    st.classList.toggle("ok", !!msg && !isErr);
+    st.classList.toggle("err", !!msg && !!isErr);
+  }
+
+  function renderPlanGrid() {
+    const grid = els.planGrid;
+    const cur = els.planCurrent;
+    if (!grid) return;
+    const mine = currentPlan();
+    if (cur) {
+      const p = PLANS[mine] || PLANS.free;
+      cur.innerHTML = "Plan actual: <b>" + p.name + "</b> · " + p.price + "/mes" +
+        (mine === "free" ? " · " + p.tasaciones : " · tasaciones ilimitadas");
+    }
+    grid.innerHTML = "";
+    for (const id of PLAN_ORDER) {
+      const p = PLANS[id];
+      if (!p) continue;
+      const isCurrent = mine === id;
+      const card = document.createElement("div");
+      card.className = "plan-card" + (isCurrent ? " is-current" : "") + (id === "premium" ? " highlight" : "");
+      card.innerHTML =
+        '<div class="plan-card-head">' +
+          '<p class="plan-name">' + esc(p.name) + '</p>' +
+          (isCurrent ? '<span class="plan-badge current">Actual</span>' : '<span class="plan-badge">' + p.tasaciones + '</span>') +
+        '</div>' +
+        '<p class="plan-price">' + esc(p.note) + ' · <b>' + p.price + '</b>/mes</p>' +
+        '<ul class="plan-features">' + p.features.map((f) => "<li>" + esc(f) + "</li>").join("") + "</ul>" +
+        (isCurrent
+          ? '<button type="button" class="plan-btn current" disabled>Plan actual</button>'
+          : '<button type="button" class="plan-btn" data-plan="' + id + '">' +
+            (mine === "free" || id === "free" ? "Elegir " + p.name : "Cambiar a " + p.name) + '</button>');
+      grid.appendChild(card);
+    }
+    grid.querySelectorAll(".plan-btn[data-plan]").forEach((b) => {
+      b.addEventListener("click", () => setPlan(b.getAttribute("data-plan")));
+    });
+  }
+
+  async function setPlan(id) {
+    if (!PLANS[id] || !window.Auth || !Auth.isLoggedIn()) return;
+    const btn = els.planGrid ? els.planGrid.querySelector(".plan-btn[data-plan='" + id + "']") : null;
+    if (btn) { btn.disabled = true; btn.textContent = "Activando…"; }
+    setPlanStatus("");
+    try {
+      const res = await Auth.fetchAuth("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: id })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "No se pudo actualizar el plan.");
+      if (data.user) {
+        const s = Auth.load();
+        if (s && s.user) { s.user.plan = data.user.plan; Auth.save(s); }
+      }
+      const p = PLANS[id];
+      setPlanStatus(id === "free"
+        ? "Listo. Volviste al plan Gratis (5 tasaciones al día)."
+        : "¡Listo! Ya tienes el plan " + p.name + " con tasaciones ilimitadas.", false);
+      setTimeout(() => { closePlanModal(); Auth.refresh(); }, 900);
+    } catch (err) {
+      setPlanStatus(err.message || "Ocurrió un error.", true);
+      if (btn) { btn.disabled = false; btn.textContent = "Reintentar"; }
+    }
   }
 
   function showLimitModal(uso) {
@@ -1055,11 +1258,30 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && els.leadModal && !els.leadModal.classList.contains("hidden")) closeLeadModal();
     if (e.key === "Escape" && els.limitModal && !els.limitModal.classList.contains("hidden")) closeLimitModal();
+    if (e.key === "Escape" && els.planModal && !els.planModal.classList.contains("hidden")) closePlanModal();
+    if (e.key === "Escape" && els.quotaPop && !els.quotaPop.classList.contains("hidden")) closeQuotaPop();
   });
   if (els.limitClose) els.limitClose.addEventListener("click", closeLimitModal);
   if (els.limitCloseBtn) els.limitCloseBtn.addEventListener("click", closeLimitModal);
+  if (els.limitUpgradeBtn) els.limitUpgradeBtn.addEventListener("click", () => { closeLimitModal(); openPlanModal(); });
   if (els.limitModal) els.limitModal.addEventListener("click", (e) => {
     if (e.target === els.limitModal) closeLimitModal();
+  });
+
+  if (els.quotaBtn) els.quotaBtn.addEventListener("click", toggleQuotaPop);
+  document.addEventListener("click", (e) => {
+    const wrap = els.quotaBtn && els.quotaBtn.closest(".quota-wrap");
+    if (els.quotaPop && !els.quotaPop.classList.contains("hidden") && wrap && !wrap.contains(e.target)) closeQuotaPop();
+  });
+  if (els.planClose) els.planClose.addEventListener("click", closePlanModal);
+  if (els.planModal) els.planModal.addEventListener("click", (e) => {
+    if (e.target === els.planModal) closePlanModal();
+  });
+  if (els.planCancel) els.planCancel.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (currentPlan() === "free") { closePlanModal(); return; }
+    if (!window.confirm("¿Quieres cancelar tu plan y volver al plan Gratis (5 tasaciones al día)?")) return;
+    setPlan("free");
   });
 
   function startValuation() {
