@@ -649,13 +649,21 @@
       warnMissingField(missing);
       return;
     }
+    if (window.Auth && !Auth.isLoggedIn()) {
+      Auth.requireLogin(() => runValuationAfterAuth(), "Debes iniciar sesión para tasar tu propiedad.");
+      return;
+    }
+    runValuationAfterAuth();
+  }
+
+  function runValuationAfterAuth() {
     fetchUsoStatus().then((uso) => {
       refreshQuotaHint(uso);
       if (uso.blocked) {
         showLimitModal(uso);
         return;
       }
-      openLeadModal();
+      startValuation();
     });
   }
 
@@ -742,7 +750,9 @@
       const timer = setTimeout(() => ctrl.abort(), 8000);
       let res;
       try {
-        res = await fetch(apiUrl("/api/uso/consumir"), { method: "POST", signal: ctrl.signal });
+        res = window.Auth
+          ? await Auth.fetchAuth("/api/uso/consumir", { method: "POST", signal: ctrl.signal })
+          : await fetch(apiUrl("/api/uso/consumir"), { method: "POST", signal: ctrl.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -842,6 +852,8 @@
 
   /* ---------- Correo de la tasación al email del usuario ---------- */
   function getLeadEmail() {
+    const account = window.Auth && Auth.getUser ? Auth.getUser() : null;
+    if (account && account.email) return account.email;
     const saved = getSavedLead();
     if (saved && saved.email) return saved.email;
     if (els.leadEmail && els.leadEmail.value.trim()) return els.leadEmail.value.trim();
@@ -1733,7 +1745,9 @@
       const timer = setTimeout(() => ctrl.abort(), 120000);
       let res;
       try {
-        res = await fetch(apiUrl("/api/comparables?" + params.toString()), { signal: ctrl.signal });
+        res = window.Auth
+          ? await Auth.fetchAuth("/api/comparables?" + params.toString(), { signal: ctrl.signal })
+          : await fetch(apiUrl("/api/comparables?" + params.toString()), { signal: ctrl.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -1794,7 +1808,9 @@
       const timer = setTimeout(() => ctrl.abort(), 120000);
       let res;
       try {
-        res = await fetch(apiUrl("/api/cocheras?" + params.toString()), { signal: ctrl.signal });
+        res = window.Auth
+          ? await Auth.fetchAuth("/api/cocheras?" + params.toString(), { signal: ctrl.signal })
+          : await fetch(apiUrl("/api/cocheras?" + params.toString()), { signal: ctrl.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -1912,7 +1928,9 @@
       const timer = setTimeout(() => ctrl.abort(), 120000);
       let res;
       try {
-        res = await fetch(apiUrl("/api/rentals?" + params.toString()), { signal: ctrl.signal });
+        res = window.Auth
+          ? await Auth.fetchAuth("/api/rentals?" + params.toString(), { signal: ctrl.signal })
+          : await fetch(apiUrl("/api/rentals?" + params.toString()), { signal: ctrl.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -2263,7 +2281,9 @@
         lat: loc.lat != null ? loc.lat : "",
         lon: loc.lon != null ? loc.lon : ""
       });
-      const res = await fetch(apiUrl("/api/environment?" + params.toString()));
+      const res = window.Auth
+        ? await Auth.fetchAuth("/api/environment?" + params.toString())
+        : await fetch(apiUrl("/api/environment?" + params.toString()));
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
       if (seq !== envSeq || !state.location) return;
@@ -2295,18 +2315,31 @@
       const timer = setTimeout(() => ctrl.abort(), 40000);
       let res;
       try {
-        res = await fetch(apiUrl("/api/descripcion"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: ctrl.signal,
-          body: JSON.stringify({
-            district: loc.district || "",
-            city: loc.city || "",
-            type: inputs.type,
-            inputs: inputs,
-            description: desc
-          })
-        });
+        res = window.Auth
+          ? await Auth.fetchAuth("/api/descripcion", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: ctrl.signal,
+              body: JSON.stringify({
+                district: loc.district || "",
+                city: loc.city || "",
+                type: inputs.type,
+                inputs: inputs,
+                description: desc
+              })
+            })
+          : await fetch(apiUrl("/api/descripcion"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: ctrl.signal,
+              body: JSON.stringify({
+                district: loc.district || "",
+                city: loc.city || "",
+                type: inputs.type,
+                inputs: inputs,
+                description: desc
+              })
+            });
       } finally {
         clearTimeout(timer);
       }

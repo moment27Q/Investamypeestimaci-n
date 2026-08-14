@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const url = require("url");
+const crypto = require("crypto");
 
 (function loadEnv() {
   try {
@@ -225,6 +226,76 @@ function usoConsume(ip) {
   return usoStatus(ip);
 }
 
+/* ---------- Autenticación (registro / inicio de sesión) ---------- */
+const SESSION_DAYS = 30;
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(String(password), salt, 64).toString("hex");
+  return salt + ":" + hash;
+}
+
+function verifyPassword(password, stored) {
+  const parts = String(stored || "").split(":");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+  const test = crypto.scryptSync(String(password), parts[0], 64);
+  const expected = Buffer.from(parts[1], "hex");
+  return test.length === expected.length && crypto.timingSafeEqual(test, expected);
+}
+
+function hashToken(token) {
+  return crypto.createHash("sha256").update(String(token)).digest("hex");
+}
+
+function startSession(userId) {
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 3600 * 1000);
+  if (db && db.createSession) {
+    db.createSession(userId, hashToken(token), expiresAt).catch(() => {});
+  }
+  return token;
+}
+
+async function authUser(req) {
+  const header = String(req.headers.authorization || "");
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token || !db || !db.findUserByToken) return null;
+  try {
+    return await db.findUserByToken(hashToken(token));
+  } catch (e) {
+    return null;
+  }
+}
+
+async function requireAuth(req, res) {
+  const user = await authUser(req);
+  if (user) return user;
+  res.writeHead(401, { "Content-Type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify({ error: "Debes iniciar sesión para realizar esta acción." }));
+  return null;
+}
+
+function readJsonBody(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (d) => {
+      body += d;
+      if (body.length > (maxBytes || 100000)) {
+        req.destroy();
+        reject(new Error("Cuerpo demasiado grande"));
+      }
+    });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(body || "{}"));
+      } catch (e) {
+        reject(new Error("JSON inválido"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -267,11 +338,99 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "POST" && parsed.pathname === "/api/uso/consumir") {
-    res.writeHead(200, {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store"
-    });
-    res.end(JSON.stringify(usoConsume(clientIp(req))));
+    (async () => {
+      const user = await requireAuth(req, res);
+      if (!user) return;
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store"
+      });
+      res.end(JSON.stringify(usoConsume(clientIp(req))));
+    })();
+    return;
+  }
+
+  /* ---------- Registro / inicio de sesión ---------- */
+  if (parsed.pathname === "/api/auth/me") {
+    authUser(req)
+      .then((user) => {
+        if (!user) {
+          res.writeHead(401, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok: false, error: "No autenticado" }));
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: true, user }));
+      })
+      .catch((e) => {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      });
+    return;
+  }
+
+  if (req.method === "POST" && parsed.pathname === "/api/auth/registro") {
+    readJsonBody(req, 20000)
+      .then(async (body) => {
+        const name = String(body.name || "").trim().slice(0, 80);
+        const email = String(body.email || "").trim().toLowerCase();
+        const password = String(body.password || "");
+        if (!name) throw Object.assign(new Error("Ingresa tu nombre."), { status: 400 });
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Object.assign(new Error("Correo inválido."), { status: 400 });
+        if (password.length < 6) throw Object.assign(new Error("La contraseña debe tener al menos 6 caracteres."), { status: 400 });
+        if (!db || !db.createUser) throw Object.assign(new Error("La base de datos no está disponible. Intenta más tarde."), { status: 503 });
+        const existing = await db.findUserByEmail(email);
+        if (existing) throw Object.assign(new Error("Ese correo ya está registrado. Inicia sesión."), { status: 409 });
+        const user = await db.createUser({ name, email, passwordHash: hashPassword(password) });
+        const token = startSession(user.id);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({
+          ok: true,
+          token,
+          user: { id: user.id, name: user.name, email: user.email }
+        }));
+      })
+      .catch((e) => {
+        const status = e && e.status ? e.status : 500;
+        res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: false, error: e.message || "Error al registrar." }));
+      });
+    return;
+  }
+
+  if (req.method === "POST" && parsed.pathname === "/api/auth/login") {
+    readJsonBody(req, 20000)
+      .then(async (body) => {
+        const email = String(body.email || "").trim().toLowerCase();
+        const password = String(body.password || "");
+        if (!email || !password) throw Object.assign(new Error("Ingresa tu correo y contraseña."), { status: 400 });
+        if (!db || !db.findUserByEmail) throw Object.assign(new Error("La base de datos no está disponible. Intenta más tarde."), { status: 503 });
+        const user = await db.findUserByEmail(email);
+        if (!user || !verifyPassword(password, user.password_hash)) {
+          throw Object.assign(new Error("Correo o contraseña incorrectos."), { status: 401 });
+        }
+        const token = startSession(user.id);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({
+          ok: true,
+          token,
+          user: { id: user.id, name: user.name, email: user.email }
+        }));
+      })
+      .catch((e) => {
+        const status = e && e.status ? e.status : 500;
+        res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ ok: false, error: e.message || "Error al iniciar sesión." }));
+      });
+    return;
+  }
+
+  if (req.method === "POST" && parsed.pathname === "/api/auth/logout") {
+    const header = String(req.headers.authorization || "");
+    const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+    if (token && db && db.deleteSession) db.deleteSession(hashToken(token)).catch(() => {});
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: true }));
     return;
   }
 
@@ -390,7 +549,10 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: "Falta district o city" }));
       return;
     }
-    serveMarket("venta", query, getComparables, 3, res, "Error al obtener comparables");
+    (async () => {
+      if (!(await requireAuth(req, res))) return;
+      serveMarket("venta", query, getComparables, 3, res, "Error al obtener comparables");
+    })();
     return;
   }
 
@@ -406,7 +568,10 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: "Falta district o city" }));
       return;
     }
-    serveMarket("alquiler", query, getRentals, 2, res, "Error al obtener alquileres");
+    (async () => {
+      if (!(await requireAuth(req, res))) return;
+      serveMarket("alquiler", query, getRentals, 2, res, "Error al obtener alquileres");
+    })();
     return;
   }
 
@@ -421,7 +586,10 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: "Falta district o city", count: 0, avgPrice: null }));
       return;
     }
-    serveMarket("cochera", query, getCocheraComparables, 3, res, "Error al obtener comparables de cocheras");
+    (async () => {
+      if (!(await requireAuth(req, res))) return;
+      serveMarket("cochera", query, getCocheraComparables, 3, res, "Error al obtener comparables de cocheras");
+    })();
     return;
   }
 
@@ -512,18 +680,21 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: "Faltan lat/lon o district/city" }));
       return;
     }
-    getEnvironmentProfile(loc)
-      .then((data) => {
-        res.writeHead(200, {
-          "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "no-store"
+    (async () => {
+      if (!(await requireAuth(req, res))) return;
+      getEnvironmentProfile(loc)
+        .then((data) => {
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store"
+          });
+          res.end(JSON.stringify(data));
+        })
+        .catch((e) => {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Error en análisis de entorno", detail: e.message }));
         });
-        res.end(JSON.stringify(data));
-      })
-      .catch((e) => {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Error en análisis de entorno", detail: e.message }));
-      });
+    })();
     return;
   }
 
@@ -615,6 +786,7 @@ const server = http.createServer((req, res) => {
       if (body.length > 200000) req.destroy();
     });
     req.on("end", async () => {
+      if (!(await requireAuth(req, res))) return;
       let payload = {};
       try {
         payload = JSON.parse(body || "{}");

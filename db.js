@@ -81,6 +81,22 @@ async function initDb() {
         ON scraped_listings (kind);
       CREATE INDEX IF NOT EXISTS scraped_listings_district_idx
         ON scraped_listings (district);
+
+      CREATE TABLE IF NOT EXISTS users (
+        id            BIGSERIAL PRIMARY KEY,
+        name          TEXT NOT NULL,
+        email         TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        expires_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
     `);
 
     // Migración idempotente: normalizar la URL (sin ?query ni #hash) y limpiar
@@ -244,7 +260,87 @@ async function saveScrape(kind, query, data) {
   }
 }
 
-module.exports = { initDb, saveScrape, isReady, getPool, getSavedMarket, buildMarket };
+module.exports = {
+  initDb,
+  saveScrape,
+  isReady,
+  getPool,
+  getSavedMarket,
+  buildMarket,
+  createUser,
+  findUserByEmail,
+  findUserById,
+  createSession,
+  findUserByToken,
+  deleteSession
+};
+
+/* ------------------------------------------------------------------ */
+/* Usuarios y sesiones (inicio de sesión)                              */
+/* ------------------------------------------------------------------ */
+
+async function createUser({ name, email, passwordHash }) {
+  const p = getPool();
+  if (!p) return null;
+  const r = await p.query(
+    `INSERT INTO users (name, email, password_hash)
+     VALUES ($1, LOWER($2), $3)
+     RETURNING id, name, email, created_at`,
+    [String(name || "").trim(), String(email || "").trim(), passwordHash]
+  );
+  return r.rows[0] || null;
+}
+
+async function findUserByEmail(email) {
+  const p = getPool();
+  if (!p) return null;
+  const r = await p.query(
+    `SELECT * FROM users WHERE email = LOWER($1)`,
+    [String(email || "").trim()]
+  );
+  return r.rows[0] || null;
+}
+
+async function findUserById(id) {
+  const p = getPool();
+  if (!p) return null;
+  const r = await p.query(
+    `SELECT id, name, email, created_at FROM users WHERE id = $1`,
+    [id]
+  );
+  return r.rows[0] || null;
+}
+
+async function createSession(userId, tokenHash, expiresAt) {
+  const p = getPool();
+  if (!p) return false;
+  await p.query(
+    `INSERT INTO sessions (token_hash, user_id, expires_at)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (token_hash) DO NOTHING`,
+    [tokenHash, userId, expiresAt]
+  );
+  return true;
+}
+
+async function findUserByToken(tokenHash) {
+  const p = getPool();
+  if (!p) return null;
+  const r = await p.query(
+    `SELECT u.id, u.name, u.email, u.created_at
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id
+      WHERE s.token_hash = $1 AND s.expires_at > now()`,
+    [tokenHash]
+  );
+  return r.rows[0] || null;
+}
+
+async function deleteSession(tokenHash) {
+  const p = getPool();
+  if (!p) return;
+  await p.query(`DELETE FROM sessions WHERE token_hash = $1`, [tokenHash]);
+}
 
 /* ------------------------------------------------------------------ */
 /* Lectura de avisos guardados por distrito (respaldo para la tasación) */

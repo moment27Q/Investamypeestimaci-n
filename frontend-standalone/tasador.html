@@ -26,6 +26,10 @@
     </nav>
     <div class="topbar-meta">
       <span class="live-dot"><i></i> En vivo · Urbania · ASEI · BCRP</span>
+      <span class="auth-box">
+        <span class="auth-user hidden" id="authUser"></span>
+        <button type="button" class="auth-btn" id="authBtn">Ingresar</button>
+      </span>
     </div>
   </header>
 
@@ -583,8 +587,42 @@
     </div>
   </div>
 
+  <div class="modal-overlay hidden" id="authModal">
+    <div class="modal modal-auth">
+      <div class="modal-head">
+        <h3>Acceso a Tasora</h3>
+        <button type="button" class="modal-close" id="authClose" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="auth-msg hidden" id="authMessage"></p>
+        <div class="auth-tabs" role="tablist">
+          <button type="button" class="auth-tab" id="authTabLogin" role="tab">Iniciar sesión</button>
+          <button type="button" class="auth-tab active" id="authTabRegister" role="tab">Crear cuenta</button>
+        </div>
+        <form id="authForm" class="auth-form" novalidate>
+          <label class="auth-field" id="authNameWrap">
+            <span>Nombre completo</span>
+            <input type="text" id="authName" autocomplete="name" placeholder="Ej. Juan Pérez">
+          </label>
+          <label class="auth-field">
+            <span>Correo electrónico</span>
+            <input type="email" id="authEmail" autocomplete="email" placeholder="Ej. juan@gmail.com" required>
+          </label>
+          <label class="auth-field">
+            <span>Contraseña</span>
+            <input type="password" id="authPass" autocomplete="new-password" minlength="6" placeholder="Mínimo 6 caracteres" required>
+          </label>
+          <p class="auth-status hidden" id="authStatus"></p>
+          <button type="submit" class="ap-submit" id="authSubmit">Crear cuenta y empezar</button>
+        </form>
+        <p class="auth-note" id="authNote">Al crear tu cuenta, tu correo queda guardado en nuestra base de datos y podrás tasar propiedades.</p>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/data.js"></script>
   <script src="js/valuation.js"></script>
   <script src="js/geocode.js"></script>
