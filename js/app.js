@@ -1720,8 +1720,8 @@
     closeListingModal();
     els.marketBadge.textContent = "Buscando…";
     els.marketBadge.className = "market-badge loading";
-    els.marketSub.textContent = "Revisando avisos reales de Adondevivir, Urbania y Remax en " +
-      (loc.district || loc.city) + "… esto puede tardar 20–60 s.";
+    els.marketSub.textContent = "Consultando el mercado de " +
+      (loc.district || loc.city) + "… (la primera vez de cada distrito puede tardar 20–60 s).";
 
     try {
       const params = new URLSearchParams({
@@ -1900,8 +1900,8 @@
     if (!state.loading) els.rentalPanel.classList.remove("hidden");
     els.rentalBadge.textContent = "Buscando…";
     els.rentalBadge.className = "rental-badge loading";
-    els.rentalSub.textContent = "Revisando avisos de alquiler de Urbania y Adondevivir en " +
-      (loc.district || loc.city) + "… esto puede tardar 20–60 s.";
+    els.rentalSub.textContent = "Consultando alquileres de Urbania y Adondevivir en " +
+      (loc.district || loc.city) + "… (la primera vez de cada distrito puede tardar 20–60 s).";
 
     try {
       const params = new URLSearchParams({

@@ -108,6 +108,42 @@ async function marketWithDbFallback(kind, query, liveData, minCount) {
   }
 }
 
+/*
+ * Sirve el mercado de un distrito lo más rápido posible:
+ *  1) Si la DB ya guardó avisos suficientes para ese distrito/tipo, responde
+ *     de inmediato (milisegundos) y refresca la data en segundo plano.
+ *  2) Si no, ejecuta el scrape en vivo (solo la primera vez) y lo guarda.
+ */
+async function serveMarket(kind, query, scraperFn, minCount, res, errorMsg) {
+  const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
+  try {
+    if (db && db.getSavedMarket) {
+      const saved = await db.getSavedMarket(kind, query);
+      if (saved && saved.count >= minCount) {
+        saved.dataSource = "db";
+        if (scraperFn) {
+          scraperFn(query).catch((e) => console.log("[db] refresco 2º plano", kind, "→", e.message));
+        }
+        res.writeHead(200, JSON_HEADERS);
+        res.end(JSON.stringify(saved));
+        return;
+      }
+    }
+    if (!scraperFn) {
+      res.writeHead(503, JSON_HEADERS);
+      res.end(JSON.stringify({ error: "Módulo de precios de mercado no disponible (npm install pendiente)", count: 0 }));
+      return;
+    }
+    const live = await scraperFn(query);
+    const data = await marketWithDbFallback(kind, query, live, minCount);
+    res.writeHead(200, JSON_HEADERS);
+    res.end(JSON.stringify(data));
+  } catch (e) {
+    res.writeHead(500, JSON_HEADERS);
+    res.end(JSON.stringify({ error: errorMsg, detail: e.message }));
+  }
+}
+
 const ROOT = __dirname;
 
 /* ---------- Límite diario de tasaciones por IP ---------- */
@@ -354,24 +390,7 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: "Falta district o city" }));
       return;
     }
-    if (!getComparables) {
-      res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Módulo de precios de mercado no disponible (npm install pendiente)", count: 0 }));
-      return;
-    }
-    getComparables(query)
-      .then((data) => marketWithDbFallback("venta", query, data, 3))
-      .then((data) => {
-        res.writeHead(200, {
-          "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "no-store"
-        });
-        res.end(JSON.stringify(data));
-      })
-      .catch((e) => {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Error al obtener comparables", detail: e.message }));
-      });
+    serveMarket("venta", query, getComparables, 3, res, "Error al obtener comparables");
     return;
   }
 
@@ -387,24 +406,7 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: "Falta district o city" }));
       return;
     }
-    if (!getRentals) {
-      res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Módulo de precios de alquiler no disponible (npm install pendiente)", count: 0 }));
-      return;
-    }
-    getRentals(query)
-      .then((data) => marketWithDbFallback("alquiler", query, data, 2))
-      .then((data) => {
-        res.writeHead(200, {
-          "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "no-store"
-        });
-        res.end(JSON.stringify(data));
-      })
-      .catch((e) => {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Error al obtener alquileres", detail: e.message }));
-      });
+    serveMarket("alquiler", query, getRentals, 2, res, "Error al obtener alquileres");
     return;
   }
 
@@ -419,24 +421,7 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: "Falta district o city", count: 0, avgPrice: null }));
       return;
     }
-    if (!getCocheraComparables) {
-      res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Módulo de cocheras no disponible (npm install pendiente)", count: 0, avgPrice: null }));
-      return;
-    }
-    getCocheraComparables(query)
-      .then((data) => marketWithDbFallback("cochera", query, data, 3))
-      .then((data) => {
-        res.writeHead(200, {
-          "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "no-store"
-        });
-        res.end(JSON.stringify(data));
-      })
-      .catch((e) => {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Error al obtener comparables de cocheras", detail: e.message, count: 0, avgPrice: null }));
-      });
+    serveMarket("cochera", query, getCocheraComparables, 3, res, "Error al obtener comparables de cocheras");
     return;
   }
 
@@ -452,24 +437,7 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: "Falta district o city" }));
       return;
     }
-    if (!getNexoProjects) {
-      res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Módulo de proyectos Nexo no disponible (npm install pendiente)", count: 0 }));
-      return;
-    }
-    getNexoProjects(query)
-      .then((data) => marketWithDbFallback("nexo", query, data, 1))
-      .then((data) => {
-        res.writeHead(200, {
-          "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "no-store"
-        });
-        res.end(JSON.stringify(data));
-      })
-      .catch((e) => {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Error al obtener proyectos Nexo", detail: e.message, count: 0 }));
-      });
+    serveMarket("nexo", query, getNexoProjects, 1, res, "Error al obtener proyectos Nexo");
     return;
   }
 
