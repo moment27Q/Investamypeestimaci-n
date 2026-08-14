@@ -167,7 +167,7 @@
     Math.round(n).toLocaleString("es-PE", { maximumFractionDigits: 0 });
 
   /* ---------------- Fotos de la propiedad ---------------- */
-  const MAX_PROPERTY_PHOTOS = 4;
+  const MAX_PROPERTY_PHOTOS = 3;
   const MAX_PROPERTY_PHOTO_SIZE = 10 * 1024 * 1024;
   const PROPERTY_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
