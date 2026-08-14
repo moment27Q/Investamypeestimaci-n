@@ -1604,53 +1604,7 @@
     goNexoPage();
   });
 
-  /* ---------------- Tasador profesional (planes de servicio) ---------------- */
-  const APPRAISER_WHATSAPP = "51999000301";
-
-  const APPRAISER_PLANS = [
-    {
-      key: "rnt",
-      name: "Informe RNT completo",
-      price: 450,
-      badge: "Virtual",
-      time: "Entrega 5 días hábiles",
-      desc: "Inspección virtual + informe formal según D.S. N° 013-2002-VIVIENDA, firmado por tasador colegiado. Válido para trámites y referencia bancaria.",
-      extra: ["Informe RNT completo y firmado", "Fotografías y croquis de ubicación", "Válido para bancos y notarías"]
-    },
-    {
-      key: "visita",
-      name: "Tasación con visita",
-      price: 890,
-      badge: "Más pedido",
-      time: "Entrega 4 días hábiles",
-      desc: "Visita técnica del tasador al inmueble, medición real y verificación de acabados. Informe RNT + certificado de tasación.",
-      extra: ["Visita técnica al inmueble", "Medición y verificación de acabados", "Informe RNT + certificado de tasación"]
-    },
-    {
-      key: "urgente",
-      name: "Tasación urgente",
-      price: 1290,
-      badge: "24–48 h",
-      time: "Entrega 24–48 horas",
-      desc: "Prioridad total para casos con plazo: venta, herencia, división y partición o trámite notarial. Todo incluido, con soporte hasta la entrega.",
-      extra: ["Todo lo del plan Visita", "Prioridad 24–48 h", "Soporte y consultas hasta la entrega"]
-    }
-  ];
-
-  function appraiserPlanCard(p) {
-    return (
-      '<div class="ap-card" data-plan="' + esc(p.key) + '">' +
-        '<div class="ap-badge">' + esc(p.badge) + '</div>' +
-        '<h4>' + esc(p.name) + '</h4>' +
-        '<div class="ap-price">S/ ' + p.price.toLocaleString("es-PE") + '</div>' +
-        '<p>' + esc(p.desc) + '</p>' +
-        '<ul>' + p.extra.map((x) => "<li>" + esc(x) + "</li>").join("") + '</ul>' +
-        '<div class="ap-time">' + esc(p.time) + '</div>' +
-        '<button type="button" class="ap-select" data-plan="' + esc(p.key) + '">Solicitar este plan</button>' +
-      '</div>'
-    );
-  }
-
+  /* ---------------- Tasador profesional (requerimiento por correo) ---------------- */
   function openAppraiserPlan() {
     const loc = state.location;
     const addr = (loc && (loc.display || loc.address)) ? esc(loc.display || loc.address) : "";
@@ -1661,30 +1615,32 @@
       : "";
     els.apBody.innerHTML =
       '<p class="ap-intro">Tasadores colegiados con experiencia en valorizaciones para bancos, notarías, herencias y trámites legales.</p>' +
-      '<div class="ap-plans">' + APPRAISER_PLANS.map(appraiserPlanCard).join("") + "</div>" +
       snap +
-      '<form id="apForm" class="ap-form">' +
+      '<div class="ap-emailbox">' +
         "<h4>Solicitar tasación profesional</h4>" +
-        '<label>Nombre completo<input type="text" id="apName" placeholder="Ej. Juan Pérez" required></label>' +
-        '<label>Celular / WhatsApp<input type="tel" id="apPhone" placeholder="Ej. 999 888 777" required></label>' +
-        '<label>Departamento / provincia<input type="text" id="apCity" placeholder="Ej. Lima" value="Lima"></label>' +
-        '<label>Dirección del inmueble<input type="text" id="apAddress" placeholder="Ej. Av. Larco 1234, Miraflores" value="' + addr + '"></label>' +
-        '<label>Plan elegido<select id="apPlan">' +
-          APPRAISER_PLANS.map((p) => '<option value="' + esc(p.key) + '">' + esc(p.name) + " — S/ " + p.price.toLocaleString("es-PE") + "</option>").join("") +
-        "</select></label>" +
-        '<button type="submit" class="ap-submit">Enviar solicitud por WhatsApp</button>' +
-        '<p class="ap-note">Al enviar se abre WhatsApp con tu solicitud armada; un tasador te confirmará el costo y la fecha de la visita.</p>' +
-      "</form>";
-    selectAppraiserPlan(APPRAISER_PLANS[0].key);
+        '<p class="ap-intro">Elige el tipo de inmueble y el rango que estás dispuesto a pagar por la tasación profesional; un tasador te contacta con una propuesta a la brevedad.</p>' +
+        '<form id="apEmailForm" class="ap-form">' +
+          '<label>Nombre completo<input type="text" id="apEmailName" placeholder="Ej. Juan Pérez" required></label>' +
+          '<label>Celular / WhatsApp<input type="tel" id="apEmailPhone" placeholder="Ej. 999 888 777" required></label>' +
+          '<label>Departamento / provincia<input type="text" id="apEmailCity" placeholder="Ej. Lima" value="Lima"></label>' +
+          '<label>Dirección del inmueble<input type="text" id="apEmailAddress" placeholder="Ej. Av. Larco 1234, Miraflores" value="' + addr + '"></label>' +
+          '<label>Tipo de inmueble<select id="apEmailType">' +
+            '<option value="Departamento">Departamento</option>' +
+            '<option value="Casa">Casa / Inmueble</option>' +
+            '<option value="Terreno">Terreno</option>' +
+            '<option value="Local comercial">Local comercial</option>' +
+          "</select></label>" +
+          '<label>Rango que estás dispuesto a pagar</label>' +
+          '<div class="ap-budget">' +
+            '<div class="ap-budget-row"><span>Desde</span><input type="range" id="apBudgetMin" min="150" max="3000" step="50" value="200"><b id="apBudgetMinVal">S/ 200</b></div>' +
+            '<div class="ap-budget-row"><span>Hasta</span><input type="range" id="apBudgetMax" min="150" max="3000" step="50" value="1000"><b id="apBudgetMaxVal">S/ 1000</b></div>' +
+          "</div>" +
+          '<button type="submit" class="ap-submit">Aceptar y enviar requerimiento</button>' +
+          '<p class="ap-note">Al aceptar, tu requerimiento llega al correo de la empresa y un tasador te contacta con la propuesta.</p>' +
+        "</form>" +
+      "</div>";
     els.appraiserModal.classList.remove("hidden");
     document.body.classList.add("no-scroll");
-  }
-
-  function selectAppraiserPlan(key) {
-    const cards = els.apBody.querySelectorAll(".ap-card");
-    cards.forEach((c) => c.classList.toggle("ap-active", c.dataset.plan === key));
-    const sel = els.apBody.querySelector("#apPlan");
-    if (sel) sel.value = key;
   }
 
   function closeAppraiserPlan() {
@@ -1697,31 +1653,70 @@
   els.appraiserModal.addEventListener("click", (e) => {
     if (e.target === els.appraiserModal) closeAppraiserPlan();
   });
-  els.apBody.addEventListener("click", (e) => {
-    const t = e.target.closest(".ap-card, .ap-select");
-    if (t) selectAppraiserPlan(t.dataset.plan);
+
+  function formatSoles(n) { return "S/ " + Number(n).toLocaleString("es-PE"); }
+
+  els.apBody.addEventListener("input", (e) => {
+    if (e.target.id === "apBudgetMin") {
+      const max = els.apBody.querySelector("#apBudgetMax");
+      const val = parseInt(e.target.value, 10);
+      if (max && val > parseInt(max.value, 10)) max.value = val;
+      const lbl = els.apBody.querySelector("#apBudgetMinVal");
+      if (lbl) lbl.textContent = formatSoles(val);
+    }
+    if (e.target.id === "apBudgetMax") {
+      const min = els.apBody.querySelector("#apBudgetMin");
+      const val = parseInt(e.target.value, 10);
+      if (min && val < parseInt(min.value, 10)) min.value = val;
+      const lbl = els.apBody.querySelector("#apBudgetMaxVal");
+      if (lbl) lbl.textContent = formatSoles(val);
+    }
   });
-  els.apBody.addEventListener("change", (e) => {
-    if (e.target.id === "apPlan") selectAppraiserPlan(e.target.value);
-  });
+
   els.apBody.addEventListener("submit", (e) => {
-    if (e.target.id !== "apForm") return;
+    if (e.target.id !== "apEmailForm") return;
     e.preventDefault();
     const val = (id) => (els.apBody.querySelector(id) || {}).value || "";
-    const key = val("#apPlan");
-    const plan = APPRAISER_PLANS.find((p) => p.key === key) || APPRAISER_PLANS[0];
-    const msg =
-      "Hola, quiero solicitar una tasación profesional.\n\n" +
-      "· Plan: " + plan.name + " (S/ " + plan.price + ")\n" +
-      "· Nombre: " + val("#apName") + "\n" +
-      "· Celular: " + val("#apPhone") + "\n" +
-      "· Departamento: " + val("#apCity") + "\n" +
-      "· Dirección: " + val("#apAddress") + "\n" +
-      (state.lastTotal ? "· Valor referencial del tasador: S/ " + fmt(state.lastTotal) + "\n" : "") +
-      "\nPor favor confírmenme el costo final y la fecha de atención. Gracias.";
-    window.open("https://wa.me/" + APPRAISER_WHATSAPP + "?text=" + encodeURIComponent(msg), "_blank");
-    showStatus("Solicitud lista: se abrió WhatsApp para enviar tu mensaje al tasador.");
-    closeAppraiserPlan();
+    const name = val("#apEmailName").trim();
+    const phone = val("#apEmailPhone").trim();
+    const city = val("#apEmailCity").trim() || "Lima";
+    const address = val("#apEmailAddress").trim();
+    const type = val("#apEmailType");
+    const min = parseInt(val("#apBudgetMin"), 10) || 200;
+    const max = parseInt(val("#apBudgetMax"), 10) || 1000;
+    if (!name || !phone) {
+      showStatus("Completa tu nombre y celular para enviar el requerimiento.", true, true);
+      return;
+    }
+    const btn = els.apBody.querySelector("#apEmailSubmit");
+    if (btn) { btn.disabled = true; btn.textContent = "Enviando…"; }
+    const payload = {
+      _subject: "Nuevo requerimiento de tasación profesional — " + type,
+      _template: "table",
+      Nombre: name,
+      "Celular / WhatsApp": phone,
+      "Departamento / provincia": city,
+      "Dirección del inmueble": address || "—",
+      "Tipo de inmueble": type,
+      "Presupuesto dispuesto a pagar": formatSoles(min) + " – " + formatSoles(max),
+      "Valor referencial estimado": state.lastTotal ? "S/ " + fmt(state.lastTotal) : "—"
+    };
+    fetch("https://formsubmit.co/ajax/contacto@tasador.investamype.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then((res) => res.json().then((json) => ({ ok: res.ok, json })))
+      .then(({ ok, json }) => {
+        const success = json && (json.success === "true" || json.success === true);
+        if (!ok && !success) throw new Error("No se pudo enviar el correo.");
+        showStatus("Requerimiento enviado a la empresa. Un tasador te contactará pronto.");
+        closeAppraiserPlan();
+      })
+      .catch(() => {
+        showStatus("No se pudo enviar el requerimiento. Verifica tu conexión e intenta de nuevo.", true, true);
+        if (btn) { btn.disabled = false; btn.textContent = "Aceptar y enviar requerimiento"; }
+      });
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !els.appraiserModal.classList.contains("hidden")) closeAppraiserPlan();
