@@ -81,10 +81,40 @@ const { analyzePhotos, analyzeValuationPhotos } = require("./vision");
 const { validateLocation } = require("./ubicacion");
 const geocoder = require("./geocoder");
 
+let db = null;
+try {
+  db = require("./db");
+} catch (e) { /* sin postgres */ }
+
+/*
+ * Respaldar la tasación con la data guardada en la DB: si el scrape en vivo
+ * devuelve pocos avisos (o ninguno) para un distrito, se combina con lo que
+ * ya quedó guardado de ese mismo distrito y se recalculan las estadísticas.
+ */
+async function marketWithDbFallback(kind, query, liveData, minCount) {
+  if (liveData.count >= minCount || !db || !db.getSavedMarket) return liveData;
+  try {
+    const saved = await db.getSavedMarket(kind, query);
+    if (!saved) return liveData;
+    const liveItems = liveData.listings || liveData.projects || [];
+    const savedItems = saved.listings || saved.projects || [];
+    const merged = db.buildMarket(kind, query, liveItems.concat(savedItems));
+    if (!merged || merged.count < minCount) return liveData;
+    merged.dataSource = merged.count === (savedItems.length ? saved.count : 0) ? "db" : "live+db";
+    merged.fallbackFrom = (saved.fetchedAt || "").slice(0, 10);
+    return merged;
+  } catch (e) {
+    return liveData;
+  }
+}
+
 const ROOT = __dirname;
 
 /* ---------- Límite diario de tasaciones por IP ---------- */
-const USAGE_LIMIT = parseInt(process.env.TASACIONES_DIARIAS || "5", 10);
+// Solo aplica en producción (Render/Docker, NODE_ENV=production). En local
+// nunca se limita. Se puede forzar con TASACIONES_DIARIAS.
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const USAGE_LIMIT = IS_PRODUCTION ? parseInt(process.env.TASACIONES_DIARIAS || "5", 10) : null;
 const USAGE_FILE = path.join(ROOT, "data", "uso.json");
 const LIMA_OFFSET_MS = -5 * 3600 * 1000; // Lima (UTC-5)
 
@@ -128,6 +158,9 @@ function clientIp(req) {
 
 function usoStatus(ip) {
   const date = limaDate();
+  if (USAGE_LIMIT == null) {
+    return { ok: true, unlimited: true, used: 0, limit: null, remaining: null, blocked: false, resetAt: null, date: date };
+  }
   const rec = uso.entries[ip];
   const used = rec && rec.date === date ? rec.count : 0;
   return {
@@ -145,6 +178,7 @@ function usoConsume(ip) {
   const date = limaDate();
   const status = usoStatus(ip);
   if (status.blocked) return status;
+  if (USAGE_LIMIT == null) return status;
   const rec = uso.entries[ip];
   if (!rec || rec.date !== date) {
     uso.entries[ip] = { date: date, count: 1 };
@@ -226,6 +260,12 @@ const server = http.createServer((req, res) => {
       memoryMB: Math.round(os.totalmem() / 1048576),
       scraperLoaded: !!(getComparables && getRentals && getNexoProjects),
       chromium: chromium,
+      db: db
+        ? {
+            configured: db.isReady(),
+            connected: db.isReady()
+          }
+        : { configured: false, connected: false },
       env: {
         aiKey: aiKey ? mask(aiKey) : "(no configurada)",
         aiKeyName: aiKey ? (aiKey.startsWith("gsk_") ? "Groq" : "xAI") : null,
@@ -320,6 +360,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     getComparables(query)
+      .then((data) => marketWithDbFallback("venta", query, data, 3))
       .then((data) => {
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
@@ -352,6 +393,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     getRentals(query)
+      .then((data) => marketWithDbFallback("alquiler", query, data, 2))
       .then((data) => {
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
@@ -383,6 +425,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     getCocheraComparables(query)
+      .then((data) => marketWithDbFallback("cochera", query, data, 3))
       .then((data) => {
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
@@ -415,6 +458,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     getNexoProjects(query)
+      .then((data) => marketWithDbFallback("nexo", query, data, 1))
       .then((data) => {
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
@@ -659,3 +703,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`\n  Tasora — http://localhost:${PORT}\n`);
 });
+
+if (db && db.initDb) {
+  db.initDb().catch((e) => console.log("[db] init falló →", e.message));
+}

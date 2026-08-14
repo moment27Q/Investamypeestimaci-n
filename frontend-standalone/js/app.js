@@ -722,6 +722,9 @@
       }
       if (!res.ok) throw new Error("http");
       const data = await res.json().catch(() => ({}));
+      if (data && data.unlimited) {
+        return { remote: true, unlimited: true, used: 0, limit: null, remaining: null, blocked: false, resetAt: null };
+      }
       if (typeof data.used !== "number") throw new Error("shape");
       return {
         remote: true, used: data.used, limit: data.limit || USO_LIMIT,
@@ -745,6 +748,9 @@
       }
       if (!res.ok) throw new Error("http");
       const data = await res.json().catch(() => ({}));
+      if (data && data.unlimited) {
+        return { remote: true, unlimited: true, used: 0, limit: null, remaining: null, blocked: false, resetAt: null };
+      }
       if (typeof data.used !== "number") throw new Error("shape");
       return {
         remote: true, used: data.used, limit: data.limit || USO_LIMIT,
@@ -773,7 +779,7 @@
   function refreshQuotaHint(uso) {
     const h = els.quotaHint;
     if (h) {
-      if (!uso) {
+      if (!uso || uso.unlimited) {
         h.classList.add("hidden");
       } else if (uso.blocked) {
         h.textContent = "Llegaste al límite de " + uso.limit + " tasaciones gratuitas de hoy. Se renueva mañana.";
@@ -785,7 +791,7 @@
         h.classList.remove("limit");
       }
     }
-    if (els.tasarBtn) els.tasarBtn.disabled = !!(uso && uso.blocked);
+    if (els.tasarBtn) els.tasarBtn.disabled = !!(uso && uso.blocked && !uso.unlimited);
   }
 
   function showLimitModal(uso) {

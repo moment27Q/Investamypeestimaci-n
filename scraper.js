@@ -2,6 +2,22 @@
 
 const { chromium } = require("playwright");
 
+// Guardado en Postgres (opcional): si pg/DATABASE_URL no están configurados, la
+// app sigue funcionando igual con la caché en memoria.
+let saveScrape = null;
+try {
+  ({ saveScrape } = require("./db"));
+} catch (e) {
+  saveScrape = null;
+}
+
+function persist(kind, query, data) {
+  if (!saveScrape) return;
+  saveScrape(kind, query, data).catch((e) => {
+    console.log("[db] persist", kind, "falló →", e.message);
+  });
+}
+
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
@@ -670,6 +686,7 @@ async function getComparables(query) {
     if (data.count >= 2) {
       CACHE.set(cacheKey, { data, fetchedAt: now });
     }
+    persist("venta", query, data);
     return data;
   });
 
@@ -739,6 +756,7 @@ async function getRentals(query) {
     if (data.count >= 2) {
       RENT_CACHE.set(cacheKey, { data, fetchedAt: now });
     }
+    persist("alquiler", query, data);
     return data;
   });
 
@@ -928,6 +946,7 @@ async function getCocheraComparables(query) {
       COCHERA_CACHE.set(cacheKey, { data, fetchedAt: now });
     }
     console.log("[scraper] cocheras", query.district || query.city, "→", data.count, "avisos, promedio S/", data.avgPrice, "(", (data.sources || []).join("+") || "sin fuente", ")");
+    persist("cochera", query, data);
     return data;
   });
 
@@ -1089,6 +1108,7 @@ async function getNexoProjects(query) {
     if (data.count >= 1) {
       NEXO_CACHE.set(cacheKey, { data, fetchedAt: now });
     }
+    persist("nexo", query, data);
     return data;
   })();
 
