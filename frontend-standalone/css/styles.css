@@ -226,28 +226,36 @@ html { scroll-behavior: smooth; }
 .about { position: relative; padding: 100px 24px 82px; overflow: hidden; background: #f5f2eb; }
 .about::before { content: ""; position: absolute; width: 530px; height: 530px; top: -345px; right: -110px; border: 1px solid #d8d0bf; border-radius: 50%; box-shadow: 0 0 0 56px rgba(216,208,191,.22), 0 0 0 112px rgba(216,208,191,.13); }
 .about-inner { position: relative; max-width: 1020px; margin: 0 auto; }
-.about-intro { display: grid; grid-template-columns: .83fr 1.17fr; column-gap: 50px; align-items: end; margin-bottom: 64px; }
+.about-head { max-width: 780px; margin-bottom: 58px; }
 .about-tag {
   display: inline-block;
   font-size: 11.5px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
   color: #1f4e8c; border-bottom: 2px solid #e2aa3d;
-  padding: 0 0 8px; margin-bottom: 16px;
+  padding: 0 0 8px; margin-bottom: 20px;
 }
-.about-kicker { margin: 0; color: #798293; font-family: Georgia, serif; font-size: 18px; font-style: italic; }
-.about-intro h2 { grid-column: 2; margin: 0 0 17px; font-size: 42px; line-height: 1.06; letter-spacing: -1.25px; color: var(--ink); }
-.about-lead {
-  grid-column: 2; margin: 0; max-width: 645px;
-  font-size: 15px; line-height: 1.7; color: var(--ink-soft);
-}
-.method { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 34px; }
-.method::before { content: ""; position: absolute; top: 38px; left: 10%; right: 10%; border-top: 1px dashed #b8bdc5; }
-.method-step { position: relative; padding-top: 76px; }
-.method-mark { position: absolute; top: 0; left: 0; display: flex; align-items: center; justify-content: space-between; width: 100%; }
-.method-mark span { color: #8090a5; font-size: 11px; font-weight: 800; letter-spacing: 1px; }.method-mark i { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid #b8bdc5; border-radius: 50%; background: #f5f2eb; color: #1f4e8c; font-size: 19px; font-style: normal; }
-.method-copy { border-top: 3px solid #1f4e8c; padding-top: 18px; }.method-step:nth-child(2) .method-copy { border-color: #27a673; }.method-step:nth-child(3) .method-copy { border-color: #e2aa3d; }
-.method-eyebrow { display: block; margin-bottom: 11px; color: #73829a; font-size: 10px; font-weight: 800; letter-spacing: 1.15px; text-transform: uppercase; }
-.method-copy h3 { margin: 0 0 11px; color: #17233d; font-size: 21px; line-height: 1.18; letter-spacing: -.35px; }.method-copy p { min-height: 91px; margin: 0; color: #59677d; font-size: 13.5px; line-height: 1.65; }.method-detail { display: block; margin-top: 17px; padding-top: 13px; border-top: 1px solid #d9d8d1; color: #788397; font-size: 10.5px; font-weight: 700; line-height: 1.45; }
-.about-bottom { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 62px; padding-top: 23px; border-top: 1px solid #d3d1c9; }.about-bottom p { max-width: 420px; margin: 0; color: #59677d; font-family: Georgia, serif; font-size: 16px; font-style: italic; line-height: 1.5; }.about-cta { flex: none; padding: 13px 21px; font-size: 13px; }.about-cta span { margin-left: 7px; font-size: 18px; line-height: 0; }
+.about-kicker { margin: 0; color: #798293; font-family: Georgia, serif; font-size: 20px; font-style: italic; }
+.about-head h2 { margin: 14px 0 0; font-size: 44px; line-height: 1.05; letter-spacing: -1.25px; color: var(--ink); }
+.about-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 60px; align-items: center; }
+.about-lead { margin: 0; font-size: 16px; line-height: 1.75; color: var(--ink-soft); }
+.about-actions { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-top: 34px; padding-top: 26px; border-top: 1px solid #d3d1c9; }
+.about-note { max-width: 380px; margin: 0; color: #59677d; font-family: Georgia, serif; font-size: 15.5px; font-style: italic; line-height: 1.55; }
+.about-figure { position: relative; display: flex; justify-content: center; }
+.about-figure::before { content: ""; position: absolute; top: 8%; bottom: 8%; left: 6%; right: 6%; border-radius: 64px; background: radial-gradient(120% 130% at 50% 0%, rgba(31,78,140,.18), rgba(31,78,140,0) 58%); filter: blur(3px); }
+.about-photo { position: relative; width: 300px; }
+.about-photo::after { content: ""; position: absolute; inset: -14px; border: 1px solid rgba(31,78,140,.16); border-radius: 44px; }
+.about-photo img { display: block; width: 100%; height: auto; border-radius: 34px; border: 7px solid #fff; box-shadow: 0 32px 70px rgba(23,35,61,.22), 0 6px 18px rgba(23,35,61,.10); }
+.about-cta { flex: none; padding: 13px 21px; font-size: 13px; }
+.about-cta span { margin-left: 7px; font-size: 18px; line-height: 0; }
+
+/* ---------- Video ---------- */
+.showcase { position: relative; padding: 86px 24px 96px; overflow: hidden; background: #fff; }
+.showcase::before { content: ""; position: absolute; width: 530px; height: 530px; bottom: -345px; left: -110px; border: 1px solid #e2e0d8; border-radius: 50%; box-shadow: 0 0 0 56px rgba(226,224,216,.22), 0 0 0 112px rgba(226,224,216,.13); }
+.showcase-inner { position: relative; max-width: 900px; margin: 0 auto; }
+.showcase-head { text-align: center; margin-bottom: 40px; }
+.showcase-head h2 { margin: 14px 0 0; font-size: 34px; line-height: 1.12; letter-spacing: -1px; color: var(--ink); }
+.showcase-frame { position: relative; margin: 0; }
+.showcase-frame::after { content: ""; position: absolute; inset: -14px; border: 1px solid rgba(31,78,140,.14); border-radius: 40px; pointer-events: none; }
+.showcase-frame video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 24px; border: 7px solid #fff; box-shadow: 0 32px 70px rgba(23,35,61,.18), 0 6px 18px rgba(23,35,61,.08); background: #102746; }
 
 /* ---------- Sección formulario (contacto) ---------- */
 .lead {
@@ -1033,7 +1041,7 @@ body.informe-page { background: #e8ebf1; }
 @page {
   size: A4;
   margin: 18mm 16mm 20mm;
-  @bottom-center { content: "TASADOR PERÚ · Informe de Tasación · Página " counter(page) " de " counter(pages); font-size: 9px; color: #666; font-family: Georgia, serif; }
+  @bottom-center { content: "TASYFYX · Informe de Tasación · Página " counter(page) " de " counter(pages); font-size: 9px; color: #666; font-family: Georgia, serif; }
 }
 @media print {
   body.informe-page { background: #fff; }
@@ -1062,19 +1070,17 @@ body.informe-page { background: #e8ebf1; }
   .hero-sub { margin-left: auto; margin-right: auto; }
   .hero-ctas { justify-content: center; }
   .hero-preview { max-width: 420px; margin: 0 auto; width: 100%; }
-  .about-intro { grid-template-columns: 1fr; gap: 10px; }
-  .about-intro h2, .about-lead { grid-column: auto; }
-  .method { gap: 20px; }
+  .about-head { margin-bottom: 42px; }
+  .about-head h2 { font-size: 34px; }
+  .about-grid { grid-template-columns: 1fr; gap: 46px; }
+  .about-actions { align-items: flex-start; flex-direction: column; margin-top: 28px; }
   .lead-inner { grid-template-columns: 1fr; gap: 42px; max-width: 640px; }
   .lead-copy { text-align: center; }.lead-sub { margin-left: auto; margin-right: auto; }.lead-points { max-width: 300px; margin-left: auto; margin-right: auto; text-align: left; }
 }
 
 @media (max-width: 720px) {
   .about { padding-top: 70px; }
-  .method { grid-template-columns: 1fr; gap: 35px; }
-  .method::before { display: none; }
-  .method-copy p { min-height: 0; }
-  .about-bottom { align-items: flex-start; flex-direction: column; margin-top: 44px; }
+  .about-photo { width: 260px; }
   .hero-stats { grid-template-columns: 1fr; }
   .hero-stats > div { border-left: none; border-top: 1px solid rgba(255, 255, 255, 0.14); padding: 16px; }
   .hero-stats > div:first-child { border-top: none; }
@@ -1087,7 +1093,7 @@ body.informe-page { background: #e8ebf1; }
   .hero-ctas { flex-direction: column; }
   .hero-cta { width: 100%; justify-content: center; }
   .prev-price { font-size: 32px; }
-  .about, .lead { padding: 46px 18px; }
+  .about, .showcase, .lead { padding: 46px 18px; }
   .about-intro h2 { font-size: 31px; }
   .lead-inner h2 { font-size: 22px; }
   .lf-grid { grid-template-columns: 1fr; }.form-end { align-items: flex-start; flex-direction: column; }.lf-submit { width: 100%; }

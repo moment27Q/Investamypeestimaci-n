@@ -2,7 +2,7 @@
 
 const https = require("https");
 
-const UA = "TasadorPeru/1.0 (tasacion-peru)";
+const UA = "Tasyfyx/1.0 (tasacion-peru)";
 const CACHE = new Map();
 const TTL = 7 * 24 * 60 * 60 * 1000;
 let lastRequest = 0;

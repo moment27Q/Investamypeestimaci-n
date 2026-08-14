@@ -146,7 +146,7 @@
   function portada(r, district, state, type, inputs, fecha) {
     var year = new Date().getFullYear();
     return "<div class=\"portada\">" +
-      "<p class=\"sub\">TASADOR PERÚ S.A.C. · SERVICIOS DE TASACIÓN</p>" +
+      "<p class=\"sub\">TASYFYX S.A.C. · SERVICIOS DE TASACIÓN</p>" +
       "<h1>Informe de Tasación</h1>" +
       "<p class=\"sub\">INFORME TÉCNICO DE VALORIZACIÓN COMERCIAL</p>" +
       "<p class=\"small\">Reglamento Nacional de Tasaciones del Perú · D.S. N.° 013-2002-VIVIENDA y modificatorias</p>" +

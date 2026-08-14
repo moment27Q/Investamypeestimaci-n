@@ -28,7 +28,7 @@ try {
 
 let sendMail = null;
 const MAIL_FROM = process.env.MAIL_FROM || process.env.MAIL_USER || "contacto@tasador.investamype.com";
-const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || "Tasador Perú";
+const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || "Tasyfyx";
 
 if (process.env.BREVO_API_KEY) {
   // Brevo (ex Sendinblue) por HTTPS: funciona en el plan Free de Render,
@@ -450,7 +450,7 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({ ok: false, error: "Envío de correos no disponible (nodemailer)" }));
         return;
       }
-      const subject = String(payload.subject || "Tu tasación de propiedad — Tasador Perú").slice(0, 200);
+      const subject = String(payload.subject || "Tu tasación de propiedad — Tasyfyx").slice(0, 200);
       const html = String(payload.html || "").slice(0, 200000);
       try {
         await sendMail(to, subject, html);
@@ -566,5 +566,5 @@ const server = http.createServer((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`\n  Tasador Perú — http://localhost:${PORT}\n`);
+  console.log(`\n  Tasyfyx — http://localhost:${PORT}\n`);
 });

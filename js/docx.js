@@ -251,7 +251,7 @@
     return "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
       "<w:ftr xmlns:w=\"" + W + "\">" +
       "<w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr>" +
-      r("TASADOR PERÚ · Informe de Tasación · Página ") +
+      r("TASYFYX · Informe de Tasación · Página ") +
       "<w:r><w:rPr><w:sz w:val=\"18\"/></w:rPr><w:fldChar w:fldCharType=\"begin\"/></w:r>" +
       "<w:r><w:rPr><w:sz w:val=\"18\"/></w:rPr><w:instrText xml:space=\"preserve\"> PAGE </w:instrText></w:r>" +
       "<w:r><w:rPr><w:sz w:val=\"18\"/></w:rPr><w:fldChar w:fldCharType=\"end\"/></w:r>" +
