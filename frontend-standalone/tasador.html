@@ -212,8 +212,8 @@
               <option value="intermedio" selected>Intermedio</option>
               <option value="premium">Premium</option>
             </select>
-            <div class="ai-zone-value" id="finishesValue">Pendiente de foto del interior…</div>
-            <p class="field-help">Determinados por la IA a partir de la foto del interior de la propiedad · no se pueden modificar.</p>
+            <div class="ai-zone-value" id="finishesValue">Pendiente de foto del interior (opcional)…</div>
+            <p class="field-help">Determinados por la IA a partir de la foto del interior de la propiedad · sin foto no afectan la tasación · no se pueden modificar.</p>
           </div>
           <div class="field" data-types="departamento">
             <label>Áreas comunes / amenities</label>
@@ -350,7 +350,7 @@
 
         <div class="field property-photos">
           <div class="label-row">
-            <label for="propertyPhotos">Foto del interior de la propiedad <span class="photo-hint">Obligatorio · mínimo 1</span></label>
+            <label for="propertyPhotos">Foto del interior de la propiedad <span class="photo-hint">Opcional</span></label>
           </div>
           <div class="photo-zone">
             <label class="photo-pick" for="propertyPhotos">
@@ -359,7 +359,7 @@
             </label>
             <input id="propertyPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
             <div class="photo-previews" id="propertyPhotoPreviews" aria-live="polite"></div>
-            <p class="photo-status" id="propertyPhotoStatus">Sube al menos 1 foto del interior (máximo 4) para que la IA determine los acabados.</p>
+            <p class="photo-status" id="propertyPhotoStatus">Opcional: si subes una foto del interior (máximo 3), la IA la analiza para ajustar los acabados; sin foto no afecta la tasación.</p>
             <div class="desc-note hidden" id="propertyPhotoNote"></div>
           </div>
         </div>

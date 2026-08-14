@@ -39,6 +39,11 @@
   function getToken() { return session ? session.token : null; }
   function getUser() { return session ? session.user : null; }
 
+  /* Avisa al resto de la app (app.js) que cambió el estado de la sesión. */
+  function notify() {
+    try { window.dispatchEvent(new CustomEvent("tasora:auth")); } catch (e) { /* se ignora */ }
+  }
+
   function authHeaders(extra) {
     const headers = Object.assign({}, extra || {});
     const t = getToken();
@@ -63,7 +68,7 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "No se pudo crear la cuenta.");
-    if (data.token) save(data);
+    if (data.token) { save(data); notify(); }
     return data;
   }
 
@@ -75,7 +80,7 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "No se pudo iniciar sesión.");
-    if (data.token) save(data);
+    if (data.token) { save(data); notify(); }
     return data;
   }
 
@@ -83,6 +88,7 @@
     const t = getToken();
     clear();
     updateUI();
+    notify();
     if (!t) return;
     try {
       await fetch(aUrl("/api/auth/logout"), {
@@ -103,11 +109,12 @@
           session.user = data.user;
           save(session);
           updateUI();
+          notify();
           return true;
         }
-        clear(); updateUI(); return false;
+        clear(); updateUI(); notify(); return false;
       }
-      if (res.status === 401) { clear(); updateUI(); return false; }
+      if (res.status === 401) { clear(); updateUI(); notify(); return false; }
       updateUI();
       return true;
     } catch (e) {

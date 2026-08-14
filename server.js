@@ -147,12 +147,10 @@ async function serveMarket(kind, query, scraperFn, minCount, res, errorMsg) {
 
 const ROOT = __dirname;
 
-/* ---------- Límite diario de tasaciones por IP ---------- */
-// Solo aplica en producción (Render/Docker, NODE_ENV=production). En local
-// nunca se limita. Se puede forzar con TASACIONES_DIARIAS.
-const IS_PRODUCTION = process.env.NODE_ENV === "production";
-const USAGE_LIMIT = IS_PRODUCTION ? parseInt(process.env.TASACIONES_DIARIAS || "5", 10) : null;
-const USAGE_FILE = path.join(ROOT, "data", "uso.json");
+/* ---------- Límite diario de tasaciones por usuario ---------- */
+// Cada cuenta tiene 5 tasaciones gratis por día (configurable con
+// TASACIONES_DIARIAS). El contador vive en la tabla user_usage de Postgres.
+const USAGE_LIMIT = parseInt(process.env.TASACIONES_DIARIAS || "5", 10);
 const LIMA_OFFSET_MS = -5 * 3600 * 1000; // Lima (UTC-5)
 
 function limaDate(now) {
@@ -164,42 +162,13 @@ function nextLimaMidnight() {
   return Date.UTC(lima.getUTCFullYear(), lima.getUTCMonth(), lima.getUTCDate() + 1) - LIMA_OFFSET_MS;
 }
 
-let uso = { entries: {} };
-(function loadUso() {
-  try {
-    const raw = fs.readFileSync(USAGE_FILE, "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") uso = parsed;
-  } catch (e) { /* primera ejecución */ }
-  if (!uso.entries) uso.entries = {};
-})();
-
-let usoWriteTimer = null;
-function saveUso() {
-  clearTimeout(usoWriteTimer);
-  usoWriteTimer = setTimeout(() => {
-    try {
-      fs.mkdirSync(path.dirname(USAGE_FILE), { recursive: true });
-      fs.writeFileSync(USAGE_FILE, JSON.stringify(uso), "utf8");
-    } catch (e) { /* sin disco: el contador queda en memoria */ }
-  }, 500);
-}
-
-function clientIp(req) {
-  const cf = req.headers["cf-connecting-ip"];
-  if (cf) return String(cf);
-  const fwd = req.headers["x-forwarded-for"];
-  if (fwd) return String(fwd).split(",")[0].trim();
-  return (req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
-}
-
-function usoStatus(ip) {
+async function usageStatusForUser(userId) {
   const date = limaDate();
-  if (USAGE_LIMIT == null) {
-    return { ok: true, unlimited: true, used: 0, limit: null, remaining: null, blocked: false, resetAt: null, date: date };
+  let used = 0;
+  if (db && typeof db.getUserUsage === "function") {
+    used = await db.getUserUsage(userId, date);
+    if (used == null) used = 0;
   }
-  const rec = uso.entries[ip];
-  const used = rec && rec.date === date ? rec.count : 0;
   return {
     ok: true,
     used: used,
@@ -211,19 +180,18 @@ function usoStatus(ip) {
   };
 }
 
-function usoConsume(ip) {
+async function consumeUsageForUser(userId) {
   const date = limaDate();
-  const status = usoStatus(ip);
-  if (status.blocked) return status;
-  if (USAGE_LIMIT == null) return status;
-  const rec = uso.entries[ip];
-  if (!rec || rec.date !== date) {
-    uso.entries[ip] = { date: date, count: 1 };
-  } else {
-    rec.count += 1;
+  let used = 0;
+  if (db && typeof db.getUserUsage === "function") {
+    used = await db.getUserUsage(userId, date);
+    if (used == null) used = 0;
   }
-  saveUso();
-  return usoStatus(ip);
+  if (used >= USAGE_LIMIT) return usageStatusForUser(userId);
+  if (db && typeof db.incrementUserUsage === "function") {
+    await db.incrementUserUsage(userId, date);
+  }
+  return usageStatusForUser(userId);
 }
 
 /* ---------- Autenticación (registro / inicio de sesión) ---------- */
@@ -329,11 +297,15 @@ const server = http.createServer((req, res) => {
   }
 
   if (parsed.pathname === "/api/uso") {
-    res.writeHead(200, {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store"
-    });
-    res.end(JSON.stringify(usoStatus(clientIp(req))));
+    (async () => {
+      const user = await requireAuth(req, res);
+      if (!user) return;
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store"
+      });
+      res.end(JSON.stringify(await usageStatusForUser(user.id)));
+    })();
     return;
   }
 
@@ -345,7 +317,7 @@ const server = http.createServer((req, res) => {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "no-store"
       });
-      res.end(JSON.stringify(usoConsume(clientIp(req))));
+      res.end(JSON.stringify(await consumeUsageForUser(user.id)));
     })();
     return;
   }
@@ -378,10 +350,11 @@ const server = http.createServer((req, res) => {
         if (!name) throw Object.assign(new Error("Ingresa tu nombre."), { status: 400 });
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Object.assign(new Error("Correo inválido."), { status: 400 });
         if (password.length < 6) throw Object.assign(new Error("La contraseña debe tener al menos 6 caracteres."), { status: 400 });
-        if (!db || !db.createUser) throw Object.assign(new Error("La base de datos no está disponible. Intenta más tarde."), { status: 503 });
+        if (!db || !db.createUser || !db.isReady()) throw Object.assign(new Error("La base de datos no está conectada. Configura DATABASE_URL en Render."), { status: 503 });
         const existing = await db.findUserByEmail(email);
         if (existing) throw Object.assign(new Error("Ese correo ya está registrado. Inicia sesión."), { status: 409 });
         const user = await db.createUser({ name, email, passwordHash: hashPassword(password) });
+        if (!user) throw Object.assign(new Error("No se pudo guardar el usuario. Revisa la conexión a la base de datos."), { status: 500 });
         const token = startSession(user.id);
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({
@@ -404,7 +377,7 @@ const server = http.createServer((req, res) => {
         const email = String(body.email || "").trim().toLowerCase();
         const password = String(body.password || "");
         if (!email || !password) throw Object.assign(new Error("Ingresa tu correo y contraseña."), { status: 400 });
-        if (!db || !db.findUserByEmail) throw Object.assign(new Error("La base de datos no está disponible. Intenta más tarde."), { status: 503 });
+        if (!db || !db.findUserByEmail || !db.isReady()) throw Object.assign(new Error("La base de datos no está conectada. Configura DATABASE_URL en Render."), { status: 503 });
         const user = await db.findUserByEmail(email);
         if (!user || !verifyPassword(password, user.password_hash)) {
           throw Object.assign(new Error("Correo o contraseña incorrectos."), { status: 401 });

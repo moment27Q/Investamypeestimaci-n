@@ -460,8 +460,11 @@
     const v = finishesLabels[val] ? val : "intermedio";
     els.finishes.value = v;
     if (!els.finishesValue) return;
-    if (opts.pending) {
-      els.finishesValue.textContent = "Pendiente de foto del interior…";
+    if (opts.noPhoto) {
+      els.finishesValue.textContent = "No se proporcionó foto del interior";
+      els.finishesValue.classList.add("muted");
+    } else if (opts.pending) {
+      els.finishesValue.textContent = "Pendiente de foto del interior (opcional)…";
       els.finishesValue.classList.add("muted");
     } else {
       els.finishesValue.textContent = finishesLabels[v] + (opts.muted ? " (por defecto)" : "");
@@ -638,12 +641,6 @@
       if (firstCard) firstCard.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    if (!state.photos.length) {
-      showStatus("Debes subir al menos una foto del interior de la propiedad para que la IA determine los acabados y pueda hacer la tasación.");
-      const photoCard = document.querySelector(".property-photos");
-      if (photoCard) photoCard.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
-    }
     const missing = findMissingCharacteristic();
     if (missing) {
       warnMissingField(missing);
@@ -724,9 +721,14 @@
       const timer = setTimeout(() => ctrl.abort(), 8000);
       let res;
       try {
-        res = await fetch("/api/uso", { signal: ctrl.signal, headers: { "Accept": "application/json" } });
+        res = window.Auth && Auth.isLoggedIn()
+          ? await Auth.fetchAuth("/api/uso", { signal: ctrl.signal })
+          : await fetch("/api/uso", { signal: ctrl.signal, headers: { "Accept": "application/json" } });
       } finally {
         clearTimeout(timer);
+      }
+      if (res.status === 401) {
+        return { remote: false, requiresLogin: true, used: 0, limit: USO_LIMIT, remaining: USO_LIMIT, blocked: false, resetAt: null };
       }
       if (!res.ok) throw new Error("http");
       const data = await res.json().catch(() => ({}));
@@ -789,7 +791,7 @@
   function refreshQuotaHint(uso) {
     const h = els.quotaHint;
     if (h) {
-      if (!uso || uso.unlimited) {
+      if (!uso || uso.unlimited || uso.requiresLogin) {
         h.classList.add("hidden");
       } else if (uso.blocked) {
         h.textContent = "Llegaste al límite de " + uso.limit + " tasaciones gratuitas de hoy. Se renueva mañana.";
@@ -801,7 +803,7 @@
         h.classList.remove("limit");
       }
     }
-    if (els.tasarBtn) els.tasarBtn.disabled = !!(uso && uso.blocked && !uso.unlimited);
+    if (els.tasarBtn) els.tasarBtn.disabled = !!(uso && uso.blocked && !uso.unlimited && !uso.requiresLogin);
   }
 
   function showLimitModal(uso) {
@@ -827,6 +829,10 @@
   }
 
   fetchUsoStatus().then((uso) => refreshQuotaHint(uso));
+
+  document.addEventListener("tasora:auth", () => {
+    fetchUsoStatus().then((uso) => refreshQuotaHint(uso));
+  });
 
   function leadPayload(lead) {
     return {
@@ -1678,7 +1684,13 @@
   }
 
   async function fetchPropertyPhotos() {
-    if (!state.photos.length || !state.location) return;
+    if (!state.location) return;
+    if (!state.photos.length) {
+      state.photoAdj = null;
+      setFinishes("intermedio", { noPhoto: true });
+      setPropertyPhotoStatus("No se subió foto del interior; los acabados quedan en intermedio y no afectan la tasación.", false);
+      return;
+    }
     const seq = ++state.photoSeq;
     setPropertyPhotoStatus("La IA está revisando " + state.photos.length + " foto(s) para ajustar la tasación…", false);
     try {

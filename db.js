@@ -97,6 +97,13 @@ async function initDb() {
         expires_at TIMESTAMPTZ NOT NULL
       );
       CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
+
+      CREATE TABLE IF NOT EXISTS user_usage (
+        user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date    TEXT NOT NULL,
+        count   INT  NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, date)
+      );
     `);
 
     // Migración idempotente: normalizar la URL (sin ?query ni #hash) y limpiar
@@ -272,7 +279,9 @@ module.exports = {
   findUserById,
   createSession,
   findUserByToken,
-  deleteSession
+  deleteSession,
+  getUserUsage,
+  incrementUserUsage
 };
 
 /* ------------------------------------------------------------------ */
@@ -340,6 +349,30 @@ async function deleteSession(tokenHash) {
   const p = getPool();
   if (!p) return;
   await p.query(`DELETE FROM sessions WHERE token_hash = $1`, [tokenHash]);
+}
+
+/* ------------------------------------------------------------------ */
+/* Uso por usuario: cuántas tasaciones usó en un día (yyyy-mm-dd)      */
+/* ------------------------------------------------------------------ */
+
+async function getUserUsage(userId, date) {
+  const p = getPool();
+  if (!p) return null;
+  const r = await p.query(
+    `SELECT count FROM user_usage WHERE user_id = $1 AND date = $2`,
+    [userId, date]
+  );
+  return r.rows.length ? Number(r.rows[0].count) : 0;
+}
+
+async function incrementUserUsage(userId, date) {
+  const p = getPool();
+  if (!p) return;
+  await p.query(
+    `INSERT INTO user_usage (user_id, date, count) VALUES ($1, $2, 1)
+     ON CONFLICT (user_id, date) DO UPDATE SET count = user_usage.count + 1`,
+    [userId, date]
+  );
 }
 
 /* ------------------------------------------------------------------ */
