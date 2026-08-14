@@ -131,6 +131,17 @@
     planStatus: $("planStatus"),
     planClose: $("planClose"),
     planCancel: $("planCancel"),
+    planCheckout: $("planCheckout"),
+    checkoutOrder: $("checkoutOrder"),
+    ccNumber: $("ccNumber"),
+    ccName: $("ccName"),
+    ccExp: $("ccExp"),
+    ccCvv: $("ccCvv"),
+    ccPay: $("ccPay"),
+    ccBack: $("ccBack"),
+    ccPreview: $("ccPreview"),
+    ccNamePreview: $("ccNamePreview"),
+    ccExpPreview: $("ccExpPreview"),
     quotaHint: $("quotaHint"),
     tasarBtn: $("tasarBtn"),
     resultCard: $("resultCard"),
@@ -925,6 +936,7 @@
       return;
     }
     if (!els.planModal) return;
+    closeCheckout();
     setPlanStatus("");
     renderPlanGrid();
     els.planModal.classList.remove("hidden");
@@ -983,7 +995,8 @@
 
   async function setPlan(id) {
     if (!PLANS[id] || !window.Auth || !Auth.isLoggedIn()) return;
-    const btn = els.planGrid ? els.planGrid.querySelector(".plan-btn[data-plan='" + id + "']") : null;
+    if (id !== "free") { openCheckout(id); return; }
+    const btn = els.planGrid ? els.planGrid.querySelector(".plan-btn[data-plan='free']") : null;
     if (btn) { btn.disabled = true; btn.textContent = "Activando…"; }
     setPlanStatus("");
     try {
@@ -998,14 +1011,90 @@
         const s = Auth.load();
         if (s && s.user) { s.user.plan = data.user.plan; Auth.save(s); }
       }
-      const p = PLANS[id];
-      setPlanStatus(id === "free"
-        ? "Listo. Volviste al plan Gratis (5 tasaciones al día)."
-        : "¡Listo! Ya tienes el plan " + p.name + " con tasaciones ilimitadas.", false);
+      setPlanStatus("Listo. Volviste al plan Gratis (5 tasaciones al día).", false);
       setTimeout(() => { closePlanModal(); Auth.refresh(); }, 900);
     } catch (err) {
       setPlanStatus(err.message || "Ocurrió un error.", true);
       if (btn) { btn.disabled = false; btn.textContent = "Reintentar"; }
+    }
+  }
+
+  let checkoutPlan = null;
+
+  function openCheckout(id) {
+    checkoutPlan = id;
+    const p = PLANS[id];
+    if (!els.planCheckout || !p) return;
+    setPlanStatus("");
+    if (els.planCurrent) els.planCurrent.classList.add("hidden");
+    if (els.planGrid) els.planGrid.classList.add("hidden");
+    if (els.planCancel) els.planCancel.classList.add("hidden");
+    if (els.checkoutOrder) {
+      els.checkoutOrder.innerHTML =
+        '<div class="checkout-item"><span>' + esc(p.name) + ' · tasaciones ilimitadas</span><b>' + p.price + '</b></div>' +
+        '<div class="checkout-item"><span>Subtotal</span><b>' + p.price + '</b></div>' +
+        '<div class="checkout-total"><span>Total a pagar</span><b>' + p.price + '</b></div>' +
+        '<p class="checkout-recurring">Cargo mensual recurrente · puedes cancelarlo cuando quieras</p>';
+    }
+    const pay = els.ccPay;
+    if (pay) { pay.disabled = false; pay.textContent = "Pagar " + p.price; }
+    if (els.ccNumber) els.ccNumber.value = "";
+    if (els.ccName) els.ccName.value = "";
+    if (els.ccExp) els.ccExp.value = "";
+    if (els.ccCvv) els.ccCvv.value = "";
+    if (els.ccPreview) els.ccPreview.textContent = "•••• •••• •••• ••••";
+    if (els.ccNamePreview) els.ccNamePreview.textContent = "TU NOMBRE";
+    if (els.ccExpPreview) els.ccExpPreview.textContent = "MM/AA";
+    els.planCheckout.classList.remove("hidden");
+    if (els.ccNumber) els.ccNumber.focus();
+  }
+
+  function closeCheckout() {
+    checkoutPlan = null;
+    if (!els.planCheckout) return;
+    els.planCheckout.classList.add("hidden");
+    if (els.planCurrent) els.planCurrent.classList.remove("hidden");
+    if (els.planGrid) els.planGrid.classList.remove("hidden");
+    if (els.planCancel) els.planCancel.classList.remove("hidden");
+    setPlanStatus("");
+  }
+
+  async function confirmCheckout() {
+    if (!checkoutPlan || !PLANS[checkoutPlan]) return;
+    const num = (els.ccNumber ? els.ccNumber.value : "").replace(/\D/g, "");
+    const name = els.ccName ? els.ccName.value.trim() : "";
+    const exp = els.ccExp ? els.ccExp.value.trim() : "";
+    const cvv = els.ccCvv ? els.ccCvv.value.trim() : "";
+    if (num.length < 15 || num.length > 16) { setPlanStatus("Ingresa un número de tarjeta válido.", true); return; }
+    if (!name) { setPlanStatus("Ingresa el nombre del titular.", true); return; }
+    if (!/^\d{2}\s*\/\s*\d{2}$/.test(exp)) { setPlanStatus("Ingresa la fecha de vencimiento (MM/AA).", true); return; }
+    if (!/^\d{3,4}$/.test(cvv)) { setPlanStatus("Ingresa el CVV (3 o 4 dígitos).", true); return; }
+    const btn = els.ccPay;
+    if (btn) { btn.disabled = true; btn.textContent = "Procesando pago…"; }
+    setPlanStatus("");
+    await new Promise((r) => setTimeout(r, 1400));
+    const id = checkoutPlan;
+    checkoutPlan = null;
+    try {
+      const res = await Auth.fetchAuth("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: id })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "No se pudo procesar el pago.");
+      if (data.user) {
+        const s = Auth.load();
+        if (s && s.user) { s.user.plan = data.user.plan; Auth.save(s); }
+      }
+      const p = PLANS[id];
+      closeCheckout();
+      renderPlanGrid();
+      setPlanStatus("Pago aprobado. ¡Listo! Ya tienes el plan " + p.name + " con tasaciones ilimitadas.", false);
+      setTimeout(() => { closePlanModal(); Auth.refresh(); }, 1400);
+    } catch (err) {
+      setPlanStatus(err.message || "Ocurrió un error al procesar el pago.", true);
+      if (btn) { btn.disabled = false; btn.textContent = "Reintentar pago"; }
     }
   }
 
@@ -1283,6 +1372,25 @@
     if (!window.confirm("¿Quieres cancelar tu plan y volver al plan Gratis (5 tasaciones al día)?")) return;
     setPlan("free");
   });
+
+  if (els.ccNumber) els.ccNumber.addEventListener("input", () => {
+    const v = els.ccNumber.value.replace(/\D/g, "").slice(0, 16);
+    els.ccNumber.value = v.replace(/(\d{4})(?=\d)/g, "$1 ");
+    if (els.ccPreview) els.ccPreview.textContent = v ? v.replace(/(\d{4})(?=\d)/g, "$1 ") : "•••• •••• •••• ••••";
+  });
+  if (els.ccExp) els.ccExp.addEventListener("input", () => {
+    const v = els.ccExp.value.replace(/\D/g, "").slice(0, 4);
+    els.ccExp.value = v.length > 2 ? v.slice(0, 2) + "/" + v.slice(2) : v;
+    if (els.ccExpPreview) els.ccExpPreview.textContent = v.length > 2 ? v.slice(0, 2) + "/" + v.slice(2) : (v || "MM/AA");
+  });
+  if (els.ccCvv) els.ccCvv.addEventListener("input", () => {
+    els.ccCvv.value = els.ccCvv.value.replace(/\D/g, "").slice(0, 4);
+  });
+  if (els.ccName) els.ccName.addEventListener("input", () => {
+    if (els.ccNamePreview) els.ccNamePreview.textContent = els.ccName.value.trim().toUpperCase() || "TU NOMBRE";
+  });
+  if (els.ccPay) els.ccPay.addEventListener("click", confirmCheckout);
+  if (els.ccBack) els.ccBack.addEventListener("click", closeCheckout);
 
   function startValuation() {
     consumeUso().then((uso) => {

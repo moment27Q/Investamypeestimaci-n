@@ -608,7 +608,29 @@
         <div class="plan-grid" id="planGrid"></div>
         <p class="plan-status hidden" id="planStatus"></p>
         <p class="plan-cancel"><a href="#" id="planCancel">Cancelar mi plan y volver a Gratis</a></p>
-        <p class="ap-note">El pago se activa al instante de forma simulada. Próximamente con Yape, Plin o tarjeta.</p>
+        <div class="checkout hidden" id="planCheckout">
+          <div class="checkout-order" id="checkoutOrder"></div>
+          <div class="checkout-card">
+            <div class="cc-visual">
+              <p class="cc-chip"></p>
+              <p class="cc-number" id="ccPreview">•••• •••• •••• ••••</p>
+              <div class="cc-foot">
+                <span id="ccNamePreview">TU NOMBRE</span>
+                <span id="ccExpPreview">MM/AA</span>
+              </div>
+            </div>
+            <label>Número de tarjeta<input type="text" id="ccNumber" inputmode="numeric" autocomplete="off" placeholder="1234 5678 9012 3456"></label>
+            <label>Nombre del titular<input type="text" id="ccName" autocomplete="off" placeholder="Nombre como figura en la tarjeta"></label>
+            <div class="checkout-row">
+              <label>Vencimiento<input type="text" id="ccExp" inputmode="numeric" autocomplete="off" placeholder="MM/AA"></label>
+              <label>CVV<input type="password" id="ccCvv" inputmode="numeric" autocomplete="off" placeholder="•••"></label>
+            </div>
+          </div>
+          <p class="checkout-note">Simulación de pago: no se realiza ningún cargo real ni se guarda tu información de tarjeta.</p>
+          <button type="button" class="plan-btn checkout-pay" id="ccPay">Pagar</button>
+          <button type="button" class="checkout-back" id="ccBack">← Volver a elegir plan</button>
+        </div>
+        <p class="plan-note">El pago es 100% simulado. Próximamente con Yape, Plin y tarjeta real.</p>
       </div>
     </div>
   </div>
