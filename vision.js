@@ -52,6 +52,14 @@ function post(payload) {
   });
 }
 
+function friendlyReason(e) {
+  const msg = String((e && e.message) || "");
+  if (msg.includes("429") || /rate limit/i.test(msg) || /need more tokens/i.test(msg)) {
+    return "IA no disponible o mucha demanda";
+  }
+  return msg || "La IA de visión no respondió";
+}
+
 function extractJson(content) {
   if (!content) return null;
   let text = content.trim();
@@ -195,7 +203,7 @@ async function analyzePhotos(loc, images) {
       await new Promise((r) => setTimeout(r, 6000));
     }
   }
-  return { enabled: false, reason: lastErr ? lastErr.message : "La IA de visión no respondió" };
+  return { enabled: false, reason: lastErr ? friendlyReason(lastErr) : "La IA de visión no respondió" };
 }
 
 function buildValuationAnalysis(raw) {
@@ -277,7 +285,7 @@ async function analyzeValuationPhotos(loc, images, inputs) {
   try {
     return buildValuationAnalysis(await inferValuationVision(loc, images.slice(0, 4), inputs || {}));
   } catch (e) {
-    return { enabled: false, used: false, factor: 1, reason: e.message || "La IA de visión no respondió" };
+    return { enabled: false, used: false, factor: 1, reason: friendlyReason(e) };
   }
 }
 

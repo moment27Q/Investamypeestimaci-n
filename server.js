@@ -82,6 +82,79 @@ const { validateLocation } = require("./ubicacion");
 const geocoder = require("./geocoder");
 
 const ROOT = __dirname;
+
+/* ---------- Límite diario de tasaciones por IP ---------- */
+const USAGE_LIMIT = parseInt(process.env.TASACIONES_DIARIAS || "5", 10);
+const USAGE_FILE = path.join(ROOT, "data", "uso.json");
+const LIMA_OFFSET_MS = -5 * 3600 * 1000; // Lima (UTC-5)
+
+function limaDate(now) {
+  return new Date((now || Date.now()) + LIMA_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function nextLimaMidnight() {
+  const lima = new Date(Date.now() + LIMA_OFFSET_MS);
+  return Date.UTC(lima.getUTCFullYear(), lima.getUTCMonth(), lima.getUTCDate() + 1) - LIMA_OFFSET_MS;
+}
+
+let uso = { entries: {} };
+(function loadUso() {
+  try {
+    const raw = fs.readFileSync(USAGE_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") uso = parsed;
+  } catch (e) { /* primera ejecución */ }
+  if (!uso.entries) uso.entries = {};
+})();
+
+let usoWriteTimer = null;
+function saveUso() {
+  clearTimeout(usoWriteTimer);
+  usoWriteTimer = setTimeout(() => {
+    try {
+      fs.mkdirSync(path.dirname(USAGE_FILE), { recursive: true });
+      fs.writeFileSync(USAGE_FILE, JSON.stringify(uso), "utf8");
+    } catch (e) { /* sin disco: el contador queda en memoria */ }
+  }, 500);
+}
+
+function clientIp(req) {
+  const cf = req.headers["cf-connecting-ip"];
+  if (cf) return String(cf);
+  const fwd = req.headers["x-forwarded-for"];
+  if (fwd) return String(fwd).split(",")[0].trim();
+  return (req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
+}
+
+function usoStatus(ip) {
+  const date = limaDate();
+  const rec = uso.entries[ip];
+  const used = rec && rec.date === date ? rec.count : 0;
+  return {
+    ok: true,
+    used: used,
+    limit: USAGE_LIMIT,
+    remaining: Math.max(0, USAGE_LIMIT - used),
+    blocked: used >= USAGE_LIMIT,
+    resetAt: nextLimaMidnight(),
+    date: date
+  };
+}
+
+function usoConsume(ip) {
+  const date = limaDate();
+  const status = usoStatus(ip);
+  if (status.blocked) return status;
+  const rec = uso.entries[ip];
+  if (!rec || rec.date !== date) {
+    uso.entries[ip] = { date: date, count: 1 };
+  } else {
+    rec.count += 1;
+  }
+  saveUso();
+  return usoStatus(ip);
+}
+
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -111,6 +184,24 @@ const server = http.createServer((req, res) => {
   if (parsed.pathname === "/healthz") {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify({ ok: true, uptime: Math.round(process.uptime()) }));
+    return;
+  }
+
+  if (parsed.pathname === "/api/uso") {
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store"
+    });
+    res.end(JSON.stringify(usoStatus(clientIp(req))));
+    return;
+  }
+
+  if (req.method === "POST" && parsed.pathname === "/api/uso/consumir") {
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store"
+    });
+    res.end(JSON.stringify(usoConsume(clientIp(req))));
     return;
   }
 

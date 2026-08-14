@@ -364,6 +364,7 @@
           <button type="button" class="tasar-btn" id="tasarBtn">Tasar</button>
           <p class="tasar-help">Revisa la ubicación y las características, luego presiona <b>Tasar</b> para calcular la tasación estimada.</p>
         </div>
+        <p class="quota-hint hidden" id="quotaHint"></p>
       </div>
 
     </section>
@@ -561,6 +562,23 @@
           <button type="submit" class="ap-submit" id="leadSubmit">Tasar ahora</button>
           <p class="ap-note">Tus datos se envían de forma segura a contacto@tasador.investamype.com y solo se usan para enviarte el resultado de la tasación.</p>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="limitModal">
+    <div class="modal modal-limit">
+      <div class="modal-head">
+        <h3>Límite diario de tasaciones</h3>
+        <button type="button" class="modal-close" id="limitClose" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="lim-ico">5</div>
+        <p class="lim-title">Alcanzaste tus 5 tasaciones gratuitas de hoy.</p>
+        <p class="lim-sub">Tu cupo se renueva automáticamente a la medianoche. Por ahora no se pueden generar más tasaciones.</p>
+        <p class="lim-count">Próximo reinicio: <b id="limitCountdown">—</b></p>
+        <p class="lim-note">¿Necesitas más tasaciones hoy? Escríbenos a <a href="mailto:contacto@tasador.investamype.com">contacto@tasador.investamype.com</a>.</p>
+        <button type="button" class="ap-submit" id="limitCloseBtn">Entendido</button>
       </div>
     </div>
   </div>

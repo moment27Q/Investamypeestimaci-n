@@ -114,6 +114,11 @@
     leadStatus: $("leadStatus"),
     leadSubmit: $("leadSubmit"),
     leadClose: $("leadClose"),
+    limitModal: $("limitModal"),
+    limitCountdown: $("limitCountdown"),
+    limitClose: $("limitClose"),
+    limitCloseBtn: $("limitCloseBtn"),
+    quotaHint: $("quotaHint"),
     tasarBtn: $("tasarBtn"),
     resultCard: $("resultCard"),
     loadingPanel: $("loadingPanel"),
@@ -170,6 +175,14 @@
     if (!els.propertyPhotoStatus) return;
     els.propertyPhotoStatus.textContent = message;
     els.propertyPhotoStatus.classList.toggle("err", !!isError);
+  }
+
+  function friendlyVisionReason(reason) {
+    const msg = String(reason || "");
+    if (msg.includes("429") || /rate limit/i.test(msg) || /need more tokens/i.test(msg)) {
+      return "IA no disponible o mucha demanda";
+    }
+    return msg || "se mantiene el cálculo base";
   }
 
   function renderPropertyPhotos() {
@@ -636,7 +649,14 @@
       warnMissingField(missing);
       return;
     }
-    openLeadModal();
+    fetchUsoStatus().then((uso) => {
+      refreshQuotaHint(uso);
+      if (uso.blocked) {
+        showLimitModal(uso);
+        return;
+      }
+      openLeadModal();
+    });
   }
 
   /* Datos de contacto ya confirmados (localStorage): no volver a pedir el formulario */
@@ -655,6 +675,142 @@
   function saveLead(data) {
     try { localStorage.setItem(LEAD_STORAGE_KEY, JSON.stringify(data)); } catch (e) { /* se ignora */ }
   }
+
+  /* ---------- Límite diario de tasaciones (5 por día / IP) ---------- */
+  const USO_LIMIT = 5;
+  const USO_KEY = "tasadorUsoV1";
+
+  function localDateStr(d) {
+    d = d || new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  function readLocalUso() {
+    try {
+      const raw = localStorage.getItem(USO_KEY);
+      if (!raw) return { date: "", count: 0 };
+      const d = JSON.parse(raw);
+      return { date: d.date || "", count: parseInt(d.count, 10) || 0 };
+    } catch (e) { return { date: "", count: 0 }; }
+  }
+
+  function writeLocalUso(u) { try { localStorage.setItem(USO_KEY, JSON.stringify(u)); } catch (e) { /* se ignora */ } }
+
+  function localUsoStatus() {
+    const u = readLocalUso();
+    const date = localDateStr();
+    const used = u.date === date ? u.count : 0;
+    const resetAt = new Date();
+    resetAt.setHours(23, 59, 59, 999);
+    return {
+      remote: false, used: used, limit: USO_LIMIT,
+      remaining: Math.max(0, USO_LIMIT - used),
+      blocked: used >= USO_LIMIT,
+      resetAt: resetAt.getTime()
+    };
+  }
+
+  async function fetchUsoStatus() {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      let res;
+      try {
+        res = await fetch("/api/uso", { signal: ctrl.signal, headers: { "Accept": "application/json" } });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!res.ok) throw new Error("http");
+      const data = await res.json().catch(() => ({}));
+      if (typeof data.used !== "number") throw new Error("shape");
+      return {
+        remote: true, used: data.used, limit: data.limit || USO_LIMIT,
+        remaining: typeof data.remaining === "number" ? data.remaining : Math.max(0, (data.limit || USO_LIMIT) - data.used),
+        blocked: !!data.blocked, resetAt: data.resetAt
+      };
+    } catch (e) {
+      return localUsoStatus();
+    }
+  }
+
+  async function consumeUso() {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      let res;
+      try {
+        res = await fetch("/api/uso/consumir", { method: "POST", signal: ctrl.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!res.ok) throw new Error("http");
+      const data = await res.json().catch(() => ({}));
+      if (typeof data.used !== "number") throw new Error("shape");
+      return {
+        remote: true, used: data.used, limit: data.limit || USO_LIMIT,
+        remaining: typeof data.remaining === "number" ? data.remaining : Math.max(0, (data.limit || USO_LIMIT) - data.used),
+        blocked: !!data.blocked, resetAt: data.resetAt
+      };
+    } catch (e) {
+      const u = readLocalUso();
+      const date = localDateStr();
+      const count = u.date === date ? u.count : 0;
+      if (!localUsoStatus().blocked) writeLocalUso({ date: date, count: count + 1 });
+      return localUsoStatus();
+    }
+  }
+
+  function msToHMS(ms) {
+    if (!(ms > 0)) return "—";
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    const p = (n) => String(n).padStart(2, "0");
+    return h > 0 ? p(h) + ":" + p(m) + ":" + p(s) : p(m) + ":" + p(s);
+  }
+
+  function refreshQuotaHint(uso) {
+    const h = els.quotaHint;
+    if (h) {
+      if (!uso) {
+        h.classList.add("hidden");
+      } else if (uso.blocked) {
+        h.textContent = "Llegaste al límite de " + uso.limit + " tasaciones gratuitas de hoy. Se renueva mañana.";
+        h.classList.remove("hidden");
+        h.classList.add("limit");
+      } else {
+        h.textContent = "Te quedan " + uso.remaining + " de " + uso.limit + " tasaciones gratuitas hoy.";
+        h.classList.remove("hidden");
+        h.classList.remove("limit");
+      }
+    }
+    if (els.tasarBtn) els.tasarBtn.disabled = !!(uso && uso.blocked);
+  }
+
+  function showLimitModal(uso) {
+    const md = els.limitModal;
+    if (!md) return;
+    const cd = els.limitCountdown;
+    const tick = () => {
+      if (cd) cd.textContent = msToHMS((uso.resetAt || 0) - Date.now());
+    };
+    tick();
+    if (md._tick) clearInterval(md._tick);
+    md._tick = setInterval(tick, 1000);
+    md.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
+  }
+
+  function closeLimitModal() {
+    const md = els.limitModal;
+    if (!md) return;
+    md.classList.add("hidden");
+    document.body.classList.remove("no-scroll");
+    if (md._tick) { clearInterval(md._tick); md._tick = null; }
+  }
+
+  fetchUsoStatus().then((uso) => refreshQuotaHint(uso));
 
   function leadPayload(lead) {
     return {
@@ -874,9 +1030,26 @@
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && els.leadModal && !els.leadModal.classList.contains("hidden")) closeLeadModal();
+    if (e.key === "Escape" && els.limitModal && !els.limitModal.classList.contains("hidden")) closeLimitModal();
+  });
+  if (els.limitClose) els.limitClose.addEventListener("click", closeLimitModal);
+  if (els.limitCloseBtn) els.limitCloseBtn.addEventListener("click", closeLimitModal);
+  if (els.limitModal) els.limitModal.addEventListener("click", (e) => {
+    if (e.target === els.limitModal) closeLimitModal();
   });
 
   function startValuation() {
+    consumeUso().then((uso) => {
+      refreshQuotaHint(uso);
+      if (uso.blocked) {
+        showLimitModal(uso);
+        return;
+      }
+      startValuationReal();
+    });
+  }
+
+  function startValuationReal() {
     const runId = ++state.runSeq;
     state.tasado = true;
     state.dirty = false;
@@ -1516,7 +1689,7 @@
         setPropertyPhotoStatus("Fotos analizadas por IA. Ajuste visual: " + (pct > 0 ? "+" : "") + pct.toFixed(1) + "%." + interiorMsg, state.photoAdj.interiorVisible === false);
       } else {
         setFinishes("intermedio", { muted: true });
-        setPropertyPhotoStatus("Las fotos no pudieron aportar un ajuste: " + ((data && data.reason) || "se mantiene el cálculo base."), true);
+        setPropertyPhotoStatus("Las fotos no pudieron aportar un ajuste: " + friendlyVisionReason(data && data.reason) + ".", true);
       }
       recompute();
     } catch (e) {

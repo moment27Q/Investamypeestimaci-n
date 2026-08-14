@@ -633,6 +633,14 @@
     els.photoStatus.classList.toggle("err", !!isErr);
   }
 
+  function friendlyVisionReason(reason) {
+    var msg = String(reason || "");
+    if (msg.indexOf("429") !== -1 || /rate limit/i.test(msg) || /need more tokens/i.test(msg)) {
+      return "IA no disponible o mucha demanda";
+    }
+    return msg || "inténtalo de nuevo";
+  }
+
   function loadImage(file) {
     return new Promise(function (resolve, reject) {
       var reader = new FileReader();
@@ -775,7 +783,7 @@
       } else {
         state.photoAnalysis = null;
         renderPhotoResult();
-        setPhotoStatus("La IA no pudo analizar las fotos: " + ((data && data.reason) || "inténtalo de nuevo."), true);
+        setPhotoStatus("La IA no pudo analizar las fotos: " + friendlyVisionReason(data && data.reason) + ".", true);
       }
     } catch (e) {
       state.photoAnalysis = null;

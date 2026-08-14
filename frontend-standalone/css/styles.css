@@ -548,7 +548,20 @@ input[type="number"]:focus, select:focus, textarea:focus { border-color: var(--a
 }
 .tasar-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
 .tasar-btn:active { transform: translateY(0); }
+.tasar-btn:disabled { filter: grayscale(.4) brightness(.92); cursor: not-allowed; transform: none; box-shadow: none; }
 .tasar-help { margin: 0; font-size: 12px; color: var(--ink-soft); line-height: 1.5; text-align: center; }
+.quota-hint { margin: 12px 0 0; font-size: 12px; color: #59677d; text-align: center; }
+.quota-hint b { color: #1f4e8c; }
+.quota-hint.limit { color: #b45309; font-weight: 600; }
+.modal-limit { max-width: 420px; text-align: center; }
+.modal-limit .modal-body { padding: 28px 24px 24px; }
+.lim-ico { width: 64px; height: 64px; margin: 0 auto 16px; display: grid; place-items: center; border-radius: 50%; background: #f3e8d9; color: #1f4e8c; font-size: 26px; font-weight: 800; }
+.lim-title { margin: 0 0 8px; font-size: 17px; font-weight: 700; color: var(--ink); }
+.lim-sub { margin: 0 auto 12px; max-width: 320px; font-size: 13px; line-height: 1.6; color: var(--ink-soft); }
+.lim-count { margin: 0 0 14px; font-size: 13px; color: #59677d; }
+.lim-count b { color: #1f4e8c; font-variant-numeric: tabular-nums; }
+.lim-note { margin: 0 0 18px; font-size: 12px; line-height: 1.55; color: #798293; }
+.lim-note a { color: #1f4e8c; }
 
 /* ---------- Result ---------- */
 .result-card { position: relative; }
