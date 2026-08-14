@@ -387,7 +387,7 @@
         '</div>' +
         (p.phone
           ? '<a class="prov-contact" href="https://wa.me/' + esc(p.phone) +
-            '?text=' + encodeURIComponent("Hola " + p.name.split(" ")[0] + ", vi tu propuesta en Tasyfyx para construir mi propiedad de ~" + area + " m². ¿Podemos conversar?") +
+            '?text=' + encodeURIComponent("Hola " + p.name.split(" ")[0] + ", vi tu propuesta en Tasora para construir mi propiedad de ~" + area + " m². ¿Podemos conversar?") +
             '" target="_blank" rel="noopener">WhatsApp · +' + p.phone.slice(0, 3) + " " + p.phone.slice(3, 6) + " " + p.phone.slice(6) + '</a>'
           : "") +
       '</div>' +

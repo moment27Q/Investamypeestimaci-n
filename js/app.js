@@ -858,12 +858,12 @@
     return (
       "<div style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:640px;margin:0 auto\">" +
         "<div style=\"background:#0f172a;color:#fff;padding:24px 28px;border-radius:10px 10px 0 0\">" +
-          "<div style=\"font-size:20px;font-weight:700\">Tasyfyx</div>" +
+          "<div style=\"font-size:20px;font-weight:700\">Tasora</div>" +
           "<div style=\"font-size:13px;opacity:.8;margin-top:2px\">Tu tasación de propiedad</div>" +
         "</div>" +
         "<div style=\"border:1px solid #e5e7eb;border-top:none;padding:28px;border-radius:0 0 10px 10px\">" +
           "<p>" + (first ? "Hola, " + e2(first) + ":" : "Hola:") + "</p>" +
-          "<p style=\"font-size:14px;margin:0\">Gracias por usar <b>Tasyfyx</b>. Este es el valor estimado de tu propiedad:</p>" +
+          "<p style=\"font-size:14px;margin:0\">Gracias por usar <b>Tasora</b>. Este es el valor estimado de tu propiedad:</p>" +
           "<div style=\"background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:20px;text-align:center;margin:18px 0\">" +
             "<div style=\"font-size:12px;color:#166534;text-transform:uppercase;letter-spacing:.05em\">Valor estimado de venta</div>" +
             "<div style=\"font-size:34px;font-weight:700;color:#15803d;margin-top:6px\">S/ " + fmt(r.total) + "</div>" +
@@ -922,7 +922,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         to,
-        subject: "Tu tasación de propiedad — Tasyfyx",
+        subject: "Tu tasación de propiedad — Tasora",
         html: buildValuationEmail(r, getSavedLead())
       })
     })
